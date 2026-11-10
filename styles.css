@@ -58,9 +58,12 @@ select, .search {
   border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--deep); padding: 8px 10px;
 }
 .cards { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 14px; }
-.card { background: #fbfcfd; border: 1px dashed #cbd9e4; border-radius: 8px; padding: 16px; }
+.card { background: #fbfcfd; border: 1px dashed #cbd9e4; border-radius: 8px; padding: 16px; cursor: pointer; }
+.card.open { border-style: solid; border-color: var(--blue); background: #f3f8fc; }
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .card h3 { margin: 0 0 4px; font-size: 15px; }
 .card p { margin: 0; color: var(--muted); font-size: 12px; min-height: 36px; }
+.detail { margin-top: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: white; }
 .tag { display: inline-block; margin-top: 8px; font-size: 11px; color: var(--deep); background: #e7f0f8; border-radius: 99px; padding: 2px 8px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .file-button, .secondary, .primary, .text-button { border-radius: 5px; }

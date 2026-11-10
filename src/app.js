@@ -22,7 +22,7 @@ const state = {
   company: { general: [], ccb: [] },
   companyParagraphs: { general: [], ccb: [] },
   companyBase: { general: {}, ccb: {} },
-  companyOpen: false,
+  openCard: null,
   openManagers: new Set(),
   onePagers: [],
 };
@@ -210,9 +210,11 @@ async function reload() {
     }
     meta();
     const edited = recordsDiffer() || Object.keys(companyDiff('general')).length || Object.keys(companyDiff('ccb')).length;
-    saveStatus(edited ? '已载入这台浏览器里保存的修改。' : '和内置底稿一致。直接在下面修改。');
-    renderCompany();
+    saveStatus(edited ? '已载入这台浏览器里保存的修改。' : '和内置底稿一致。点一张卡片展开。');
+    renderCompany('general');
+    renderCompany('ccb');
     renderManagers();
+    applyOpenCard();
   } catch (error) {
     $('baseline-error').hidden = false;
     $('baseline-error').textContent = error.message || '底稿读取失败。';
@@ -220,35 +222,33 @@ async function reload() {
   }
 }
 
-function renderCompany() {
-  const variant = state.variant;
+function applyOpenCard() {
+  for (const key of ['managers', 'general', 'ccb']) {
+    const open = state.openCard === key;
+    $(`detail-${key}`).hidden = !open;
+    $(`card-${key}`).classList.toggle('open', open);
+    const chevron = $(`card-${key}`).querySelector('.chevron');
+    if (chevron) chevron.textContent = open ? '收起' : '展开';
+  }
+}
+
+function renderCompany(variant) {
   const sections = state.company[variant] || [];
   tagCompany(variant);
-  const other = variant === 'ccb' ? 'general' : 'ccb';
-  const textOf = name => (state.company[name] || []).flatMap(section => section.columns.flatMap(column => column.entries.map(entry => entry.text))).join('\n');
   const hint = variant === 'ccb'
-    ? '正在编辑建行版。股东介绍不含“全面领先”，也不写“资本实力位居行业最前列”。'
-    : '正在编辑通用版。股东介绍保留“全面领先”和“资本实力位居行业最前列”。';
+    ? '建行版股东介绍不含“全面领先”，也不写“资本实力位居行业最前列”。'
+    : '通用版股东介绍保留“全面领先”和“资本实力位居行业最前列”。';
   const columns = sections.flatMap(section => section.columns).filter(column => column.role === 'company' || column.role === 'shareholder');
   const notes = sections.flatMap(section => section.notes);
-  const count = columns.reduce((total, column) => total + column.entries.length, 0) + notes.length;
-  const open = state.companyOpen;
-  const title = variant === 'ccb' ? '建行版公司介绍' : '通用版公司介绍';
-  $('company-preview').innerHTML = `
-    <button type="button" class="disclosure" id="toggle-company" aria-expanded="${open}" aria-controls="company-fields">
-      <span><b>${escapeHtml(title)}</b><small>${count} 条</small></span>
-      <span class="chevron">${open ? '收起' : '展开'}</span>
-    </button>
-    <div id="company-fields" class="fold" ${open ? '' : 'hidden'}>
-      <p class="lede">${escapeHtml(hint)}${textOf(variant) === textOf(other) ? '' : ' 两个版本的正文不一致，切换后编辑的是当前这一版。'}</p>
-      <div class="company-columns">
-        ${columns.map(column => `<div>${column.entries.map(entry => `
-          <label class="clause"><b>${escapeHtml(COMPANY_LABELS[entry.key] || entry.key)}</b>
-            <textarea data-uid="${entry.uid}" rows="${Math.min(6, Math.max(2, entry.text.split('\n').length + 1))}">${escapeHtml(entry.text)}</textarea>
-          </label>`).join('')}</div>`).join('')}
-      </div>
-      ${notes.map(note => `<label class="note"><textarea data-uid="${note.uid}" rows="2" aria-label="数据说明">${escapeHtml(note.text)}</textarea></label>`).join('')}
+  $(`detail-${variant}`).innerHTML = `
+    <p class="lede">${escapeHtml(hint)}</p>
+    <div class="company-columns">
+      ${columns.map(column => `<div>${column.entries.map(entry => `
+        <label class="clause"><b>${escapeHtml(COMPANY_LABELS[entry.key] || entry.key)}</b>
+          <textarea data-uid="${entry.uid}" rows="${Math.min(6, Math.max(2, entry.text.split('\n').length + 1))}">${escapeHtml(entry.text)}</textarea>
+        </label>`).join('')}</div>`).join('')}
     </div>
+    ${notes.map(note => `<label class="note"><textarea data-uid="${note.uid}" rows="2" aria-label="数据说明">${escapeHtml(note.text)}</textarea></label>`).join('')}
   `;
 }
 
@@ -452,7 +452,7 @@ async function resetCompany(variant) {
   await writeStored(DRAFT_KEY, { ...draft, records: recordsDiffer() ? state.records.map(cloneRecord) : null });
   for (const paragraph of state.companyParagraphs[variant]) paragraph.text = state.companyBase[variant][paragraph.id];
   state.company[variant] = companySections(selectVariant(state.companyParagraphs[variant], variant));
-  if (state.variant === variant) renderCompany();
+  renderCompany(variant);
   await persistDraft();
 }
 
@@ -482,10 +482,22 @@ function bind() {
   $('variant').addEventListener('change', () => {
     state.variant = $('variant').value;
     localStorage.setItem('intro-variant', state.variant);
-    renderCompany();
     renderOnePagers();
   });
   $('manager-search').addEventListener('input', renderManagers);
+  document.querySelector('.cards').addEventListener('click', event => {
+    if (event.target.closest('button')) return;
+    const card = event.target.closest('.card');
+    if (!card?.dataset.panel) return;
+    state.openCard = state.openCard === card.dataset.panel ? null : card.dataset.panel;
+    if (state.openCard === 'general' || state.openCard === 'ccb') {
+      state.variant = state.openCard;
+      $('variant').value = state.variant;
+      localStorage.setItem('intro-variant', state.variant);
+      renderOnePagers();
+    }
+    applyOpenCard();
+  });
   $('add-manager').addEventListener('click', () => {
     const record = normalizeRecord({ id: `custom-${Date.now()}`, name: '', biography: '', sheet: '网页' }, 0);
     state.records.unshift(record);
@@ -495,19 +507,16 @@ function bind() {
     $('manager-preview').querySelector(`[data-id="${CSS.escape(record.id)}"] [data-field="name"]`)?.focus();
     scheduleSave();
   });
-  $('company-preview').addEventListener('click', event => {
-    if (!event.target.closest('#toggle-company')) return;
-    state.companyOpen = !state.companyOpen;
-    renderCompany();
-  });
-  $('company-preview').addEventListener('input', event => {
+  $('baseline').addEventListener('input', event => {
+    const panel = event.target.closest('[data-company-variant]');
     const uid = event.target?.dataset?.uid;
-    if (!uid) return;
-    const found = findTagged(state.variant, uid);
+    if (!panel || !uid) return;
+    const found = findTagged(panel.dataset.companyVariant, uid);
     if (!found) return;
-    if (found.entry) spliceClause(state.variant, found.entry, event.target.value);
+    const variant = panel.dataset.companyVariant;
+    if (found.entry) spliceClause(variant, found.entry, event.target.value);
     else {
-      const paragraph = state.companyParagraphs[state.variant].find(item => item.id === found.note.paragraphId);
+      const paragraph = state.companyParagraphs[variant].find(item => item.id === found.note.paragraphId);
       if (paragraph) paragraph.text = event.target.value;
       found.note.text = event.target.value;
     }
