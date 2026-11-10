@@ -22,6 +22,8 @@ const state = {
   company: { general: [], ccb: [] },
   companyParagraphs: { general: [], ccb: [] },
   companyBase: { general: {}, ccb: {} },
+  companyOpen: false,
+  openManagers: new Set(),
   onePagers: [],
 };
 
@@ -112,10 +114,6 @@ function safeRefresh(record) {
   } catch {
     return { text: record.biography || '', calculations: [] };
   }
-}
-
-function yearHtml(calc) {
-  return calc ? `<span class="years">${escapeHtml(String(calc.years))}</span>` : '—';
 }
 
 function meta() {
@@ -233,15 +231,24 @@ function renderCompany() {
     : '正在编辑通用版。股东介绍保留“全面领先”和“资本实力位居行业最前列”。';
   const columns = sections.flatMap(section => section.columns).filter(column => column.role === 'company' || column.role === 'shareholder');
   const notes = sections.flatMap(section => section.notes);
+  const count = columns.reduce((total, column) => total + column.entries.length, 0) + notes.length;
+  const open = state.companyOpen;
+  const title = variant === 'ccb' ? '建行版公司介绍' : '通用版公司介绍';
   $('company-preview').innerHTML = `
-    <p class="lede">${escapeHtml(hint)}${textOf(variant) === textOf(other) ? '' : ' 两个版本的正文不一致，切换后编辑的是当前这一版。'}</p>
-    <div class="company-columns">
-      ${columns.map(column => `<div>${column.entries.map(entry => `
-        <label class="clause"><b>${escapeHtml(COMPANY_LABELS[entry.key] || entry.key)}</b>
-          <textarea data-uid="${entry.uid}" rows="${Math.min(6, Math.max(2, entry.text.split('\n').length + 1))}">${escapeHtml(entry.text)}</textarea>
-        </label>`).join('')}</div>`).join('')}
+    <button type="button" class="disclosure" id="toggle-company" aria-expanded="${open}" aria-controls="company-fields">
+      <span><b>${escapeHtml(title)}</b><small>${count} 条</small></span>
+      <span class="chevron">${open ? '收起' : '展开'}</span>
+    </button>
+    <div id="company-fields" class="fold" ${open ? '' : 'hidden'}>
+      <p class="lede">${escapeHtml(hint)}${textOf(variant) === textOf(other) ? '' : ' 两个版本的正文不一致，切换后编辑的是当前这一版。'}</p>
+      <div class="company-columns">
+        ${columns.map(column => `<div>${column.entries.map(entry => `
+          <label class="clause"><b>${escapeHtml(COMPANY_LABELS[entry.key] || entry.key)}</b>
+            <textarea data-uid="${entry.uid}" rows="${Math.min(6, Math.max(2, entry.text.split('\n').length + 1))}">${escapeHtml(entry.text)}</textarea>
+          </label>`).join('')}</div>`).join('')}
+      </div>
+      ${notes.map(note => `<label class="note"><textarea data-uid="${note.uid}" rows="2" aria-label="数据说明">${escapeHtml(note.text)}</textarea></label>`).join('')}
     </div>
-    ${notes.map(note => `<label class="note"><textarea data-uid="${note.uid}" rows="2" aria-label="数据说明">${escapeHtml(note.text)}</textarea></label>`).join('')}
   `;
 }
 
@@ -249,32 +256,52 @@ function preparedRecords() {
   return state.records.map(record => ({ record, ...safeRefresh(record) }));
 }
 
+function tenureLabel(record) {
+  const item = safeRefresh(record);
+  const work = item.calculations.find(calc => calc.kind === 'work');
+  const investment = item.calculations.find(calc => calc.kind === 'investment');
+  return [work ? `从业 ${work.years}` : '', investment ? `投资 ${investment.years}` : ''].filter(Boolean).join(' · ');
+}
+
 function renderManagers() {
   const query = $('manager-search').value.trim();
   const rows = preparedRecords().filter(item => !query || item.record.name.includes(query));
   const warning = state.warnings.length ? `<p class="warn">${escapeHtml(state.warnings.slice(0, 4).join(' '))}</p>` : '';
-  $('manager-preview').innerHTML = `${warning}<table><thead><tr><th>姓名</th><th>从业日期</th><th>从业年限</th><th>投资起始</th><th>投资年限</th><th>简介</th><th></th></tr></thead><tbody>
+  $('manager-preview').innerHTML = `${warning}<div class="manager-list">
     ${rows.map(item => {
+      const record = item.record;
+      const open = state.openManagers.has(record.id);
       const work = item.calculations.find(calc => calc.kind === 'work');
       const investment = item.calculations.find(calc => calc.kind === 'investment');
-      const record = item.record;
-      return `<tr data-id="${escapeHtml(record.id)}">
-        <td><input class="cell-input name-input" data-field="name" value="${escapeHtml(record.name)}" aria-label="姓名"></td>
-        <td><input class="cell-input" type="date" data-field="workStart" value="${escapeHtml(record.workStart || '')}" aria-label="从业日期"></td>
-        <td data-year="work">${yearHtml(work)}</td>
-        <td><input class="cell-input" type="date" data-field="investmentStart" value="${escapeHtml(record.investmentStart || '')}" aria-label="投资起始日期"></td>
-        <td data-year="investment">${yearHtml(investment)}</td>
-        <td><textarea class="bio-input" data-field="biography" rows="4" aria-label="${escapeHtml(record.name || '经理')}简介">${escapeHtml(item.text)}</textarea></td>
-        <td><button type="button" class="text-button" data-remove-manager="${escapeHtml(record.id)}">删除</button></td>
-      </tr>`;
-    }).join('') || '<tr><td colspan="7">没有匹配的经理。</td></tr>'}
-  </tbody></table>`;
+      return `<article class="manager-card" data-id="${escapeHtml(record.id)}">
+        <button type="button" class="disclosure" data-toggle-manager="${escapeHtml(record.id)}" aria-expanded="${open}">
+          <span><b class="who">${escapeHtml(record.name || '未命名')}</b><small class="tenure">${escapeHtml(tenureLabel(record))}</small></span>
+          <span class="chevron">${open ? '收起' : '展开'}</span>
+        </button>
+        <div class="manager-body" ${open ? '' : 'hidden'}>
+          <div class="manager-fields">
+            <label>姓名<input class="cell-input name-input" data-field="name" value="${escapeHtml(record.name)}" aria-label="姓名"></label>
+            <label>从业日期<input class="cell-input" type="date" data-field="workStart" value="${escapeHtml(record.workStart || '')}" aria-label="从业日期"></label>
+            <label>从业年限<strong data-year="work">${work ? escapeHtml(String(work.years)) : '—'}</strong></label>
+            <label>投资起始<input class="cell-input" type="date" data-field="investmentStart" value="${escapeHtml(record.investmentStart || '')}" aria-label="投资起始日期"></label>
+            <label>投资年限<strong data-year="investment">${investment ? escapeHtml(String(investment.years)) : '—'}</strong></label>
+            <button type="button" class="text-button remove-manager" data-remove-manager="${escapeHtml(record.id)}">删除</button>
+          </div>
+          <label class="wide">简介<textarea class="bio-input" data-field="biography" rows="4" aria-label="${escapeHtml(record.name || '经理')}简介">${escapeHtml(item.text)}</textarea></label>
+        </div>
+      </article>`;
+    }).join('') || '<p class="lede">没有匹配的经理。</p>'}
+  </div>`;
 }
 
-function paintYears(row, record) {
+function paintYears(card, record) {
   const item = safeRefresh(record);
-  row.querySelector('[data-year="work"]').innerHTML = yearHtml(item.calculations.find(calc => calc.kind === 'work'));
-  row.querySelector('[data-year="investment"]').innerHTML = yearHtml(item.calculations.find(calc => calc.kind === 'investment'));
+  const work = item.calculations.find(calc => calc.kind === 'work');
+  const investment = item.calculations.find(calc => calc.kind === 'investment');
+  card.querySelector('[data-year="work"]').textContent = work ? String(work.years) : '—';
+  card.querySelector('[data-year="investment"]').textContent = investment ? String(investment.years) : '—';
+  card.querySelector('.who').textContent = record.name || '未命名';
+  card.querySelector('.tenure').textContent = tenureLabel(record);
   return item;
 }
 
@@ -396,24 +423,24 @@ async function runReview() {
 }
 
 function refreshVisibleBios() {
-  for (const row of $('manager-preview').querySelectorAll('tr[data-id]')) {
-    const record = state.records.find(item => item.id === row.dataset.id);
-    const area = row.querySelector('[data-field="biography"]');
+  for (const card of $('manager-preview').querySelectorAll('.manager-card[data-id]')) {
+    const record = state.records.find(item => item.id === card.dataset.id);
+    const area = card.querySelector('[data-field="biography"]');
     if (!record || !area || document.activeElement === area) continue;
     area.value = safeRefresh(record).text;
-    paintYears(row, record);
+    paintYears(card, record);
   }
 }
 
 function onManagerEdit(target) {
-  const row = target.closest('tr');
-  if (!row || !target.dataset.field) return;
-  const record = state.records.find(item => item.id === row.dataset.id);
+  const card = target.closest('.manager-card');
+  if (!card || !target.dataset.field) return;
+  const record = state.records.find(item => item.id === card.dataset.id);
   if (!record) return;
   record[target.dataset.field] = target.value;
-  paintYears(row, record);
+  paintYears(card, record);
   if (target.dataset.field !== 'biography') {
-    const area = row.querySelector('[data-field="biography"]');
+    const area = card.querySelector('[data-field="biography"]');
     if (area && document.activeElement !== area) area.value = safeRefresh(record).text;
   }
   scheduleSave();
@@ -460,11 +487,18 @@ function bind() {
   });
   $('manager-search').addEventListener('input', renderManagers);
   $('add-manager').addEventListener('click', () => {
-    state.records.unshift(normalizeRecord({ id: `custom-${Date.now()}`, name: '', biography: '', sheet: '网页' }, 0));
+    const record = normalizeRecord({ id: `custom-${Date.now()}`, name: '', biography: '', sheet: '网页' }, 0);
+    state.records.unshift(record);
+    state.openManagers.add(record.id);
     $('manager-search').value = '';
     renderManagers();
-    $('manager-preview').querySelector('[data-field="name"]')?.focus();
+    $('manager-preview').querySelector(`[data-id="${CSS.escape(record.id)}"] [data-field="name"]`)?.focus();
     scheduleSave();
+  });
+  $('company-preview').addEventListener('click', event => {
+    if (!event.target.closest('#toggle-company')) return;
+    state.companyOpen = !state.companyOpen;
+    renderCompany();
   });
   $('company-preview').addEventListener('input', event => {
     const uid = event.target?.dataset?.uid;
@@ -484,11 +518,24 @@ function bind() {
     if (event.target?.dataset?.field === 'workStart' || event.target?.dataset?.field === 'investmentStart') onManagerEdit(event.target);
   });
   $('manager-preview').addEventListener('click', event => {
-    const id = event.target?.dataset?.removeManager;
-    if (!id) return;
-    state.records = state.records.filter(record => record.id !== id);
-    renderManagers();
-    scheduleSave();
+    const remove = event.target.closest('[data-remove-manager]');
+    if (remove) {
+      state.openManagers.delete(remove.dataset.removeManager);
+      state.records = state.records.filter(record => record.id !== remove.dataset.removeManager);
+      renderManagers();
+      scheduleSave();
+      return;
+    }
+    const toggle = event.target.closest('[data-toggle-manager]');
+    if (!toggle) return;
+    const card = toggle.closest('.manager-card');
+    const body = card.querySelector('.manager-body');
+    const open = body.hidden;
+    body.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.querySelector('.chevron').textContent = open ? '收起' : '展开';
+    if (open) state.openManagers.add(card.dataset.id);
+    else state.openManagers.delete(card.dataset.id);
   });
   $('reset-managers').addEventListener('click', resetManagers);
   $('reset-general').addEventListener('click', () => resetCompany('general'));
