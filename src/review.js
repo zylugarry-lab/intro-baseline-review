@@ -17,9 +17,14 @@ export async function readDocxParagraphs(bytes) {
   return collectParagraphs(doc, 'word/document.xml');
 }
 
-export async function reviewOnePager({ bytes, fileName, companyBytes, variant, records, asOf, author = '介绍底稿' }) {
+export async function reviewOnePager({ bytes, fileName, companyBytes, variant, records, asOf, author = '介绍底稿', companyTextById = null }) {
   if (!/\.docx$/i.test(fileName || '')) throw new Error('一页通请使用 docx 文件。');
   const sourceParagraphs = await readDocxParagraphs(companyBytes);
+  if (companyTextById) {
+    for (const paragraph of sourceParagraphs) {
+      if (Object.prototype.hasOwnProperty.call(companyTextById, paragraph.id)) paragraph.text = companyTextById[paragraph.id];
+    }
+  }
   const zip = await globalThis.JSZip.loadAsync(bytes);
   const partNames = Object.keys(zip.files).filter(path => PART.test(path));
   if (!partNames.includes('word/document.xml')) throw new Error('一页通缺少正文，无法核对。');

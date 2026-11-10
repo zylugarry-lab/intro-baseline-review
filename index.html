@@ -19,7 +19,7 @@
       <div>
         <p class="eyebrow">内容底稿为准 · 一页通留修订</p>
         <h1>先维护底稿，再改一页通。</h1>
-        <p>经理年限按制作日期减去从业日期或投资起始日期自动重算。公司介绍在通用版和建行版之间选择。对不上的介绍直接改为一页通里的 Word 修订，改完可以下载。</p>
+        <p>经理年限按制作日期减去从业日期或投资起始日期自动重算。公司介绍和经理简介在这一页直接改，再选择通用版或建行版去对一页通。对不上的介绍写成 Word 修订，改完可以下载。</p>
       </div>
       <div class="date-card">
         <label for="as-of">本次制作日期</label>
@@ -37,7 +37,7 @@
       <div class="version-row">
         <div>
           <h2>第一步 · 内容底稿</h2>
-          <p class="lede">Excel 管经理简介和两个日期。两份 Word 分别是通用版、建行版公司介绍。表述有变化时，替换对应文件即可，本浏览器会记住。</p>
+          <p class="lede">公司介绍和经理简介直接在下面改。年限按制作日期自动重算。改动保存在这台浏览器里。</p>
         </div>
         <div>
           <label for="variant">比对用的公司介绍</label>
@@ -47,31 +47,29 @@
           </select>
         </div>
       </div>
+      <p id="save-state" class="save-state">正在读取内置底稿…</p>
       <div class="cards">
-        <article class="card drop" id="card-managers">
-          <h3>经理介绍 Excel</h3>
+        <article class="card" id="card-managers">
+          <h3>经理介绍</h3>
           <p id="managers-meta">正在读取内置底稿…</p>
           <div class="actions">
-            <label class="file-button">更换 Excel<input id="managers-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
-            <button id="download-managers" class="secondary" type="button">下载刷新年限的 Excel</button>
+            <button id="download-managers" class="secondary" type="button">下载当前 Excel</button>
             <button id="reset-managers" class="text-button" type="button">恢复内置</button>
           </div>
         </article>
-        <article class="card drop" id="card-general">
+        <article class="card" id="card-general">
           <h3>公司介绍 · 通用版</h3>
           <p id="general-meta">正在读取…</p>
           <div class="actions">
-            <label class="file-button">更换 Word<input id="general-file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></label>
-            <button id="download-general" class="secondary" type="button">下载</button>
+            <button id="download-general" class="secondary" type="button">下载当前文本</button>
             <button id="reset-general" class="text-button" type="button">恢复内置</button>
           </div>
         </article>
-        <article class="card drop" id="card-ccb">
+        <article class="card" id="card-ccb">
           <h3>公司介绍 · 建行版</h3>
           <p id="ccb-meta">正在读取…</p>
           <div class="actions">
-            <label class="file-button">更换 Word<input id="ccb-file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></label>
-            <button id="download-ccb" class="secondary" type="button">下载</button>
+            <button id="download-ccb" class="secondary" type="button">下载当前文本</button>
             <button id="reset-ccb" class="text-button" type="button">恢复内置</button>
           </div>
         </article>
@@ -79,8 +77,14 @@
       <div id="baseline-error" class="error" hidden></div>
       <div class="preview" id="company-preview"></div>
       <div class="toolbar">
-        <h2 style="font-size:16px;margin:18px 0 0">经理年限</h2>
-        <input id="manager-search" class="search" type="search" placeholder="搜索姓名" aria-label="搜索经理">
+        <div>
+          <h2 style="font-size:16px;margin:18px 0 0">经理简介</h2>
+          <p class="lede" style="margin:4px 0 0">年限按日期重算。这里改的是表述，改完会用来核对一页通。</p>
+        </div>
+        <div class="actions">
+          <input id="manager-search" class="search" type="search" placeholder="搜索姓名" aria-label="搜索经理">
+          <button id="add-manager" class="secondary" type="button">新增经理</button>
+        </div>
       </div>
       <div id="manager-preview"></div>
     </section>

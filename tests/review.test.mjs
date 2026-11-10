@@ -95,6 +95,16 @@ check(fofXml.includes('全面领先') && fofXml.includes('delText'), '建行版�
 const wang = refreshBiography(byName('王宜峰'), AS_OF);
 const fofParagraphs = await visibleParagraphs(fofCcb.bytes);
 check(fofParagraphs.some(paragraph => paragraph.text.includes(wang.text.split('\n')[0].slice(0, 12))), '王宜峰简介已按底稿改写');
+check(fofCcb.companyLabels.includes('股东介绍'), '未改底稿时，建行版会改一页通里的股东介绍');
+
+const generalShare = general.find(paragraph => paragraph.text.includes('全面领先') && paragraph.text.includes('综合金融服务商'));
+const ccbShare = ccb.find(paragraph => paragraph.text.includes('综合金融服务商') && !paragraph.text.includes('全面领先'));
+const editedCompany = await reviewOnePager({
+  bytes: read(onePagers[0]), fileName: onePagers[0], variant: 'ccb', records: managers.records, asOf: AS_OF,
+  companyBytes: read('assets/company-introduction-ccb.docx'),
+  companyTextById: { [ccbShare.id]: generalShare.text },
+});
+check(!editedCompany.companyLabels.includes('股东介绍'), '网页上改过的公司介绍会用于比对');
 
 if (failed) {
   console.error(`\n${failed} checks failed`);
