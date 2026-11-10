@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>介绍底稿核对</title>
-  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./styles.css?v=9">
 </head>
 <body>
   <header class="topbar">
@@ -49,48 +49,18 @@
       </div>
       <p id="save-state" class="save-state">正在读取内置底稿…</p>
       <div class="cards">
-        <article class="card" id="card-managers" data-panel="managers">
-          <div class="card-head">
-            <div>
-              <h3>经理介绍</h3>
-              <p id="managers-meta">正在读取内置底稿…</p>
+        <div class="slot">
+          <article class="card" id="card-managers">
+            <button type="button" class="card-toggle" data-open-panel="managers">
+              <span class="card-title"><strong>经理介绍</strong><span id="managers-meta" class="card-meta">正在读取内置底稿…</span></span>
+              <span class="chevron">展开</span>
+            </button>
+            <div class="actions">
+              <button id="download-managers" class="secondary" type="button">下载当前 Excel</button>
+              <button id="reset-managers" class="text-button" type="button">恢复内置</button>
             </div>
-            <span class="chevron">展开</span>
-          </div>
-          <div class="actions">
-            <button id="download-managers" class="secondary" type="button">下载当前 Excel</button>
-            <button id="reset-managers" class="text-button" type="button">恢复内置</button>
-          </div>
-        </article>
-        <article class="card" id="card-general" data-panel="general">
-          <div class="card-head">
-            <div>
-              <h3>公司介绍 · 通用版</h3>
-              <p id="general-meta">正在读取…</p>
-            </div>
-            <span class="chevron">展开</span>
-          </div>
-          <div class="actions">
-            <button id="download-general" class="secondary" type="button">下载当前文本</button>
-            <button id="reset-general" class="text-button" type="button">恢复内置</button>
-          </div>
-        </article>
-        <article class="card" id="card-ccb" data-panel="ccb">
-          <div class="card-head">
-            <div>
-              <h3>公司介绍 · 建行版</h3>
-              <p id="ccb-meta">正在读取…</p>
-            </div>
-            <span class="chevron">展开</span>
-          </div>
-          <div class="actions">
-            <button id="download-ccb" class="secondary" type="button">下载当前文本</button>
-            <button id="reset-ccb" class="text-button" type="button">恢复内置</button>
-          </div>
-        </article>
-      </div>
-      <div id="baseline-error" class="error" hidden></div>
-      <div id="detail-managers" class="detail" hidden>
+          </article>
+          <div id="detail-managers" class="detail" hidden>
         <div class="toolbar">
           <p class="lede" style="margin:0">点开一位经理再改简介。年限按日期重算。</p>
           <div class="actions">
@@ -99,9 +69,36 @@
           </div>
         </div>
         <div id="manager-preview"></div>
+          </div>
+        </div>
+        <div class="slot">
+          <article class="card" id="card-general">
+            <button type="button" class="card-toggle" data-open-panel="general">
+              <span class="card-title"><strong>公司介绍 · 通用版</strong><span id="general-meta" class="card-meta">正在读取…</span></span>
+              <span class="chevron">展开</span>
+            </button>
+            <div class="actions">
+              <button id="download-general" class="secondary" type="button">下载当前文本</button>
+              <button id="reset-general" class="text-button" type="button">恢复内置</button>
+            </div>
+          </article>
+          <div id="detail-general" class="detail" data-company-variant="general" hidden></div>
+        </div>
+        <div class="slot">
+          <article class="card" id="card-ccb">
+            <button type="button" class="card-toggle" data-open-panel="ccb">
+              <span class="card-title"><strong>公司介绍 · 建行版</strong><span id="ccb-meta" class="card-meta">正在读取…</span></span>
+              <span class="chevron">展开</span>
+            </button>
+            <div class="actions">
+              <button id="download-ccb" class="secondary" type="button">下载当前文本</button>
+              <button id="reset-ccb" class="text-button" type="button">恢复内置</button>
+            </div>
+          </article>
+          <div id="detail-ccb" class="detail" data-company-variant="ccb" hidden></div>
+        </div>
       </div>
-      <div id="detail-general" class="detail" data-company-variant="general" hidden></div>
-      <div id="detail-ccb" class="detail" data-company-variant="ccb" hidden></div>
+      <div id="baseline-error" class="error" hidden></div>
     </section>
 
     <section class="panel" id="compare">
@@ -126,6 +123,6 @@
     <span>建行版不写“全面领先”和“资本实力位居行业最前列”。</span>
   </footer>
   <script src="./vendor/jszip.min.js"></script>
-  <script type="module" src="./src/app.js"></script>
+  <script type="module" src="./src/app.js?v=9"></script>
 </body>
 </html>

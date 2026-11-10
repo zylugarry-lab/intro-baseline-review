@@ -57,13 +57,26 @@ h1 { margin: 0 0 8px; font-size: 34px; line-height: 1.25; letter-spacing: -.03em
 select, .search {
   border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--deep); padding: 8px 10px;
 }
-.cards { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 14px; }
-.card { background: #fbfcfd; border: 1px dashed #cbd9e4; border-radius: 8px; padding: 16px; cursor: pointer; }
+.cards { display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 14px; align-items: start; }
+.slot { min-width: 0; }
+.card { background: #fbfcfd; border: 1px dashed #cbd9e4; border-radius: 8px; padding: 16px; }
 .card.open { border-style: solid; border-color: var(--blue); background: #f3f8fc; }
-.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
-.card h3 { margin: 0 0 4px; font-size: 15px; }
-.card p { margin: 0; color: var(--muted); font-size: 12px; min-height: 36px; }
-.detail { margin-top: 14px; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: white; }
+.card-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+.card-title strong { display: block; font-size: 15px; font-weight: 650; }
+.card-meta { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; min-height: 32px; }
+.detail { margin-top: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: white; }
+.detail .company-columns { grid-template-columns: 1fr; }
 .tag { display: inline-block; margin-top: 8px; font-size: 11px; color: var(--deep); background: #e7f0f8; border-radius: 99px; padding: 2px 8px; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .file-button, .secondary, .primary, .text-button { border-radius: 5px; }
@@ -96,11 +109,11 @@ input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .manager-card { border: 1px solid var(--line); border-radius: 8px; background: #fbfcfd; }
 .manager-card .disclosure { border: 0; background: transparent; }
 .manager-body { padding: 0 14px 14px; }
-.manager-fields { display: grid; grid-template-columns: 1.1fr 1fr auto 1fr auto auto; gap: 10px 12px; align-items: end; margin-bottom: 10px; }
+.manager-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; align-items: end; margin-bottom: 10px; }
 .manager-fields label, .wide { display: block; color: var(--muted); font-size: 12px; }
 .manager-fields strong { display: block; color: var(--teal); font-size: 15px; padding: 7px 0; }
 .remove-manager { margin-bottom: 8px; }
-.wide textarea { margin-top: 4px; }
+.wide { margin-top: 4px; }
 .company-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .clause { background: #f7fafc; border-radius: 6px; padding: 12px 14px; margin: 0 0 8px; }
 .clause b { display: block; color: var(--muted); font-size: 11px; font-weight: 600; margin-bottom: 4px; }

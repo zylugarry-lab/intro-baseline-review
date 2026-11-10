@@ -225,10 +225,12 @@ async function reload() {
 function applyOpenCard() {
   for (const key of ['managers', 'general', 'ccb']) {
     const open = state.openCard === key;
-    $(`detail-${key}`).hidden = !open;
+    const detail = $(`detail-${key}`);
+    detail.hidden = !open;
     $(`card-${key}`).classList.toggle('open', open);
     const chevron = $(`card-${key}`).querySelector('.chevron');
     if (chevron) chevron.textContent = open ? '收起' : '展开';
+    if (open) detail.scrollIntoView({ block: 'nearest' });
   }
 }
 
@@ -486,10 +488,10 @@ function bind() {
   });
   $('manager-search').addEventListener('input', renderManagers);
   document.querySelector('.cards').addEventListener('click', event => {
-    if (event.target.closest('button')) return;
-    const card = event.target.closest('.card');
-    if (!card?.dataset.panel) return;
-    state.openCard = state.openCard === card.dataset.panel ? null : card.dataset.panel;
+    const opener = event.target.closest('[data-open-panel]');
+    if (!opener) return;
+    const panel = opener.dataset.openPanel;
+    state.openCard = state.openCard === panel ? null : panel;
     if (state.openCard === 'general' || state.openCard === 'ccb') {
       state.variant = state.openCard;
       $('variant').value = state.variant;
