@@ -1,0 +1,13 @@
+{
+  "name": "intro-baseline-review",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node tests/review.test.mjs",
+    "serve": "python3 -m http.server 4173"
+  },
+  "dependencies": {
+    "@xmldom/xmldom": "0.8.11",
+    "jszip": "3.10.1"
+  }
+}

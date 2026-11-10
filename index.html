@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>介绍底稿核对</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">介</div>
+      <div>介绍底稿核对<small>BASELINE REVIEW</small></div>
+    </div>
+    <div class="local"><i></i>只在本机浏览器处理，不会上传</div>
+  </header>
+  <main>
+    <section class="intro">
+      <div>
+        <p class="eyebrow">内容底稿为准 · 一页通留修订</p>
+        <h1>先维护底稿，再改一页通。</h1>
+        <p>经理年限按制作日期减去从业日期或投资起始日期自动重算。公司介绍在通用版和建行版之间选择。对不上的介绍直接改为一页通里的 Word 修订，改完可以下载。</p>
+      </div>
+      <div class="date-card">
+        <label for="as-of">本次制作日期</label>
+        <input id="as-of" type="date" required>
+        <small>这一天用来重算“X年从业经验 / X年投资经验”，也决定下载的 Excel 年限。</small>
+        <button id="use-today" class="text-button" type="button">恢复今日</button>
+      </div>
+    </section>
+    <ol class="steps">
+      <li><a href="#baseline"><b>01</b>内容底稿</a></li>
+      <li><a href="#compare"><b>02</b>对照一页通</a></li>
+    </ol>
+
+    <section class="panel" id="baseline">
+      <div class="version-row">
+        <div>
+          <h2>第一步 · 内容底稿</h2>
+          <p class="lede">Excel 管经理简介和两个日期。两份 Word 分别是通用版、建行版公司介绍。表述有变化时，替换对应文件即可，本浏览器会记住。</p>
+        </div>
+        <div>
+          <label for="variant">比对用的公司介绍</label>
+          <select id="variant">
+            <option value="general">通用版</option>
+            <option value="ccb">建行版</option>
+          </select>
+        </div>
+      </div>
+      <div class="cards">
+        <article class="card drop" id="card-managers">
+          <h3>经理介绍 Excel</h3>
+          <p id="managers-meta">正在读取内置底稿…</p>
+          <div class="actions">
+            <label class="file-button">更换 Excel<input id="managers-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
+            <button id="download-managers" class="secondary" type="button">下载刷新年限的 Excel</button>
+            <button id="reset-managers" class="text-button" type="button">恢复内置</button>
+          </div>
+        </article>
+        <article class="card drop" id="card-general">
+          <h3>公司介绍 · 通用版</h3>
+          <p id="general-meta">正在读取…</p>
+          <div class="actions">
+            <label class="file-button">更换 Word<input id="general-file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></label>
+            <button id="download-general" class="secondary" type="button">下载</button>
+            <button id="reset-general" class="text-button" type="button">恢复内置</button>
+          </div>
+        </article>
+        <article class="card drop" id="card-ccb">
+          <h3>公司介绍 · 建行版</h3>
+          <p id="ccb-meta">正在读取…</p>
+          <div class="actions">
+            <label class="file-button">更换 Word<input id="ccb-file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></label>
+            <button id="download-ccb" class="secondary" type="button">下载</button>
+            <button id="reset-ccb" class="text-button" type="button">恢复内置</button>
+          </div>
+        </article>
+      </div>
+      <div id="baseline-error" class="error" hidden></div>
+      <div class="preview" id="company-preview"></div>
+      <div class="toolbar">
+        <h2 style="font-size:16px;margin:18px 0 0">经理年限</h2>
+        <input id="manager-search" class="search" type="search" placeholder="搜索姓名" aria-label="搜索经理">
+      </div>
+      <div id="manager-preview"></div>
+    </section>
+
+    <section class="panel" id="compare">
+      <h2>第二步 · 和一页通比对</h2>
+      <p class="lede">上传一份或多份一页通 docx。页面只用当前选择的公司介绍版本，以及按制作日期刷新年限后的经理简介。一致的段落不动，对不上的地方写成 Word 修订。</p>
+      <div class="upload-box drop" id="onepager-drop">
+        <strong>一页通</strong>
+        <p class="lede">docx，可多选。旧的修订会在被改到的段落里先接受，再写下这一轮的修订；没改到的段落保持原样。</p>
+        <label class="file-button">选择一页通<input id="onepager-file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple></label>
+        <div id="onepager-list"></div>
+      </div>
+      <div class="version-row" style="margin-top:16px">
+        <p class="lede" id="compare-hint" style="margin:0">选择文件后开始核对。</p>
+        <button id="run" class="primary" type="button" disabled>开始核对</button>
+      </div>
+      <div id="run-error" class="error" hidden></div>
+      <div id="results"></div>
+    </section>
+  </main>
+  <footer>
+    <span>年限公式与底稿 Excel 一致：制作日期减去起始日期后，按 365 天下取整。不满一年保留一位小数。</span>
+    <span>建行版不写“全面领先”和“资本实力位居行业最前列”。</span>
+  </footer>
+  <script src="./vendor/jszip.min.js"></script>
+  <script type="module" src="./src/app.js"></script>
+</body>
+</html>
