@@ -62,7 +62,7 @@ export function composeElements(core, manual) {
 function performanceText(core, manual) {
   const mode = manual.perfMode || "auto";
   const p = core.performance || { mode: "announce" };
-  if (mode === "none" || (mode === "auto" && p.mode === "none")) return "本集合计划管理人不提取业绩报酬。";
+  if (mode === "none" || (mode === "auto" && p.mode === "none")) return p.sentence || "本集合计划管理人不提取业绩报酬。";
   if (mode === "tier" || (mode === "auto" && p.mode === "tier")) {
     const b1 = num(manual.b1 || p.b1);
     const b2 = num(manual.b2 || p.b2);
@@ -302,6 +302,8 @@ function amountHit(text, patterns) {
 }
 
 function fieldPerformance(basic) {
+  const waived = basic.match(/(本集合计划|本计划)不收取业绩报酬[^。\n]*/);
+  if (waived) return { mode: "none", sentence: `${waived[0].replace(/[。.]?$/, "")}。` };
   if (/不提取业绩报酬/.test(basic)) return { mode: "none" };
   if (/R1/.test(basic) && /R2/.test(basic) && /5%/.test(basic) && /50%/.test(basic)) {
     return { mode: "tier", r1: "5", r2: "50" };

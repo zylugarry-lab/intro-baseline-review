@@ -274,6 +274,8 @@ const scopeByRange = extractCore([
 ].join('\n'));
 check(scopeByRange.scope.includes('投资于现金、银行存款') && scopeByRange.scope.includes('公募证券投资基金') && scopeByRange.scope.includes('债券回购'), '标题写成投资范围时也能抽出投资范围');
 check(!scopeByRange.scope.includes('2、投资范围') && !scopeByRange.scope.includes('固定收益类资产'), '投资范围不含标题，也不把投资比例带进来');
+const noFee = composeElements(extractCore('6、业绩报酬\n本集合计划不收取业绩报酬。\n7、其他费用'), { channel: 'house' }).find(row => row[0] === '业绩报酬')[1];
+check(noFee === '本集合计划不收取业绩报酬。', '不收取业绩报酬时直接抄合同这句话');
 
 const cycleFile = '/Users/luzhiyuan/Desktop/【一页通202604】君享大类资产全周期1号.docx';
 if (existsSync(cycleFile)) {
