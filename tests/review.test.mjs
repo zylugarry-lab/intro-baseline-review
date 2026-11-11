@@ -276,6 +276,19 @@ check(scopeByRange.scope.includes('投资于现金、银行存款') && scopeByRa
 check(!scopeByRange.scope.includes('2、投资范围') && !scopeByRange.scope.includes('固定收益类资产'), '投资范围不含标题，也不把投资比例带进来');
 const noFee = composeElements(extractCore('6、业绩报酬\n本集合计划不收取业绩报酬。\n7、其他费用'), { channel: 'house' }).find(row => row[0] === '业绩报酬')[1];
 check(noFee === '本集合计划不收取业绩报酬。', '不收取业绩报酬时直接抄合同这句话');
+const tierFees = composeElements(extractCore([
+  '1、认购费率：参与金额<1000万，0.2%；参与金额≥1000万，0%。',
+  '2、参与费率：参与金额<1000万，0.2%；参与金额≥1000万，0%。',
+  '3、退出费率：0%。',
+  '4、管理费率：',
+  '本集合计划的年固定管理费率为1.0%。',
+  '5、托管费率',
+  '本集合计划的年托管费率为0.05%。',
+].join('\n')), { channel: 'house' });
+const tierRate = tierFees.find(row => row[0] === '参与/退出费率')[1];
+check(tierRate.includes('认购费率：参与金额<1000万，0.2%；参与金额≥1000万，0%。') && tierRate.includes('参与费率：参与金额<1000万，0.2%；参与金额≥1000万，0%。') && tierRate.includes('退出费率0%'), '认购费和参与费的分档写进参与/退出费率');
+check(tierFees.find(row => row[0] === '产品费率')[1] === '固定管理费率：1%/年；托管费率：0.05%/年', '分档参与费不改管理费和托管费');
+check(composeElements(extractCore('1、认购费率：0%\n2、存续期参与费率：0%\n3、退出费率：0%\n'), { channel: 'house' }).find(row => row[0] === '参与/退出费率')[1] === '0%', '没有分档时参与费和退出费都是 0 仍写成 0%');
 
 const cycleFile = '/Users/luzhiyuan/Desktop/【一页通202604】君享大类资产全周期1号.docx';
 if (existsSync(cycleFile)) {

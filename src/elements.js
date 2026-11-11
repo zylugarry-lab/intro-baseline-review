@@ -242,7 +242,7 @@ function compact(text) {
 }
 
 function fieldFees(basic) {
-  const participate = participateTiers(basic) || percentNear(basic, /(?:存续期)?参与费率|认购\/参与费率/);
+  const participate = participateTiers(basic) || bracketTiers(basic) || percentNear(basic, /(?:存续期)?参与费率|认购\/参与费率/);
   const exit = percentNear(basic, /退出费率/);
   const management = percentNear(basic, /年固定管理费率|管理费率/);
   const custody = percentNear(basic, /年托管费率|托管费率/);
@@ -260,6 +260,16 @@ function participateTiers(basic) {
     if (found) parts.push(`${found[1].trim()}${found[2]}%`);
   }
   return parts.length >= 2 ? parts.join("，") : "";
+}
+
+function bracketTiers(basic) {
+  const lines = [];
+  for (const found of basic.matchAll(/(认购费率|参与费率)[：:]\s*([^\n。]*参与金额[^\n。]*%)/g)) {
+    const body = found[2].replace(/[；;]\s*$/, "").trim();
+    const line = `${found[1]}：${body}。`;
+    if (!lines.includes(line)) lines.push(line);
+  }
+  return lines.join("\n");
 }
 
 function percentNear(text, label) {
@@ -336,6 +346,10 @@ function fieldRisk(basic) {
 
 function ratePair(participate, exit) {
   if (!participate && !exit) return "";
+  if (/(?:认购|参与)费率：/.test(participate)) {
+    const exitText = !exit ? "" : exit === "0" ? "退出费率0%" : `退出费率${exit}%`;
+    return [participate, exitText].filter(Boolean).join("\n");
+  }
   if (participate === "0" && (!exit || exit === "0")) return "0%";
   if (!participate) return exit === "0" ? "退出费率0%" : `退出费率${exit}%`;
   const part = /%/.test(participate) ? participate : `${participate}%`;
