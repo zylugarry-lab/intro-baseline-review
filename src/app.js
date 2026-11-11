@@ -23,7 +23,6 @@ const state = {
   companyParagraphs: { general: [], ccb: [] },
   companyBase: { general: {}, ccb: {} },
   openCard: null,
-  openManagers: new Set(),
   onePagers: [],
 };
 
@@ -272,25 +271,28 @@ function renderManagers() {
   $('manager-preview').innerHTML = `${warning}<div class="manager-list">
     ${rows.map(item => {
       const record = item.record;
-      const open = state.openManagers.has(record.id);
       const work = item.calculations.find(calc => calc.kind === 'work');
       const investment = item.calculations.find(calc => calc.kind === 'investment');
       return `<article class="manager-card" data-id="${escapeHtml(record.id)}">
-        <button type="button" class="disclosure" data-toggle-manager="${escapeHtml(record.id)}" aria-expanded="${open}">
-          <span><b class="who">${escapeHtml(record.name || '未命名')}</b><small class="tenure">${escapeHtml(tenureLabel(record))}</small></span>
-          <span class="chevron">${open ? '收起' : '展开'}</span>
-        </button>
-        <div class="manager-body" ${open ? '' : 'hidden'}>
-          <div class="manager-fields">
-            <label>姓名<input class="cell-input name-input" data-field="name" value="${escapeHtml(record.name)}" aria-label="姓名"></label>
-            <label>从业日期<input class="cell-input" type="date" data-field="workStart" value="${escapeHtml(record.workStart || '')}" aria-label="从业日期"></label>
-            <label>从业年限<strong data-year="work">${work ? escapeHtml(String(work.years)) : '—'}</strong></label>
-            <label>投资起始<input class="cell-input" type="date" data-field="investmentStart" value="${escapeHtml(record.investmentStart || '')}" aria-label="投资起始日期"></label>
-            <label>投资年限<strong data-year="investment">${investment ? escapeHtml(String(investment.years)) : '—'}</strong></label>
+        <div class="person-side">
+          <div class="person-head">
+            <div>
+              <strong class="who">${escapeHtml(record.name || '未命名')}</strong>
+              <span class="tenure">${escapeHtml(tenureLabel(record))}</span>
+            </div>
             <button type="button" class="text-button remove-manager" data-remove-manager="${escapeHtml(record.id)}">删除</button>
           </div>
-          <label class="wide">简介<textarea class="bio-input" data-field="biography" rows="4" aria-label="${escapeHtml(record.name || '经理')}简介">${escapeHtml(item.text)}</textarea></label>
+          <label>姓名<input class="cell-input name-input" data-field="name" value="${escapeHtml(record.name)}" aria-label="姓名"></label>
+          <div class="date-pair">
+            <label>从业日期<input class="cell-input" type="date" data-field="workStart" value="${escapeHtml(record.workStart || '')}" aria-label="从业日期"></label>
+            <label>从业年限<strong data-year="work">${work ? escapeHtml(String(work.years)) : '—'}</strong></label>
+          </div>
+          <div class="date-pair">
+            <label>投资起始<input class="cell-input" type="date" data-field="investmentStart" value="${escapeHtml(record.investmentStart || '')}" aria-label="投资起始日期"></label>
+            <label>投资年限<strong data-year="investment">${investment ? escapeHtml(String(investment.years)) : '—'}</strong></label>
+          </div>
         </div>
+        <label class="wide">简介<textarea class="bio-input" data-field="biography" rows="6" aria-label="${escapeHtml(record.name || '经理')}简介">${escapeHtml(item.text)}</textarea></label>
       </article>`;
     }).join('') || '<p class="lede">没有匹配的经理。</p>'}
   </div>`;
@@ -503,7 +505,6 @@ function bind() {
   $('add-manager').addEventListener('click', () => {
     const record = normalizeRecord({ id: `custom-${Date.now()}`, name: '', biography: '', sheet: '网页' }, 0);
     state.records.unshift(record);
-    state.openManagers.add(record.id);
     $('manager-search').value = '';
     renderManagers();
     $('manager-preview').querySelector(`[data-id="${CSS.escape(record.id)}"] [data-field="name"]`)?.focus();
@@ -530,23 +531,10 @@ function bind() {
   });
   $('manager-preview').addEventListener('click', event => {
     const remove = event.target.closest('[data-remove-manager]');
-    if (remove) {
-      state.openManagers.delete(remove.dataset.removeManager);
-      state.records = state.records.filter(record => record.id !== remove.dataset.removeManager);
-      renderManagers();
-      scheduleSave();
-      return;
-    }
-    const toggle = event.target.closest('[data-toggle-manager]');
-    if (!toggle) return;
-    const card = toggle.closest('.manager-card');
-    const body = card.querySelector('.manager-body');
-    const open = body.hidden;
-    body.hidden = !open;
-    toggle.setAttribute('aria-expanded', String(open));
-    toggle.querySelector('.chevron').textContent = open ? '收起' : '展开';
-    if (open) state.openManagers.add(card.dataset.id);
-    else state.openManagers.delete(card.dataset.id);
+    if (!remove) return;
+    state.records = state.records.filter(record => record.id !== remove.dataset.removeManager);
+    renderManagers();
+    scheduleSave();
   });
   $('reset-managers').addEventListener('click', resetManagers);
   $('reset-general').addEventListener('click', () => resetCompany('general'));
