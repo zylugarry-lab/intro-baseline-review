@@ -199,7 +199,7 @@ export function buildElementWorkbook(sheets) {
     'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="${NS.pr}">${list.map((_, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join('')}<Relationship Id="rId${list.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
     'xl/styles.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="${NS.ss}"><fonts count="2"><font><sz val="11"/><color rgb="FF222222"/><name val="微软雅黑"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="微软雅黑"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF105C8F"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7E9EF"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf></cellXfs></styleSheet>`,
+<styleSheet xmlns="${NS.ss}"><fonts count="2"><font><sz val="11"/><color rgb="FF222222"/><name val="微软雅黑"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="微软雅黑"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF105C8F"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7E9EF"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD0D7E2"/></left><right style="thin"><color rgb="FFD0D7E2"/></right><top style="thin"><color rgb="FFD0D7E2"/></top><bottom style="thin"><color rgb="FFD0D7E2"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf></cellXfs></styleSheet>`,
   };
   list.forEach((sheet, index) => { files[`xl/worksheets/sheet${index + 1}.xml`] = elementSheetXml(sheet.rows); });
   const zip = new globalThis.JSZip();
@@ -231,11 +231,18 @@ function uniqueSheetName(name, index, used) {
 function elementSheetXml(rows) {
   const body = rows.map((pair, index) => {
     const row = index + 1;
-    const height = Math.min(120, 22 + Math.ceil(String(pair[1] || '').length / 42) * 15);
-    return `<row r="${row}" ht="${height}" customHeight="1"><c r="A${row}" t="inlineStr" s="1"><is><t xml:space="preserve">${escapeXml(pair[0])}</t></is></c><c r="B${row}" t="inlineStr" s="2"><is><t xml:space="preserve">${escapeXml(pair[1])}</t></is></c></row>`;
+    return `<row r="${row}" ht="${elementRowHeight(pair[1])}" customHeight="1"><c r="A${row}" t="inlineStr" s="1"><is><t xml:space="preserve">${escapeXml(pair[0])}</t></is></c><c r="B${row}" t="inlineStr" s="2"><is><t xml:space="preserve">${escapeXml(pair[1])}</t></is></c></row>`;
   }).join('');
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="${NS.ss}"><cols><col min="1" max="1" width="18" customWidth="1"/><col min="2" max="2" width="88" customWidth="1"/></cols><sheetData>${body}</sheetData></worksheet>`;
+<worksheet xmlns="${NS.ss}"><cols><col min="1" max="1" width="28" customWidth="1"/><col min="2" max="2" width="88" customWidth="1"/></cols><sheetData>${body}</sheetData></worksheet>`;
+}
+
+function elementRowHeight(value) {
+  const lines = String(value || '').split('\n').reduce((count, line) => {
+    const units = [...line].reduce((sum, char) => sum + (char.charCodeAt(0) > 255 ? 2 : 1), 0);
+    return count + Math.max(1, Math.ceil(units / 108));
+  }, 0);
+  return Math.max(18, lines * 15 + 2);
 }
 
 function columnName(index) {
