@@ -14,6 +14,7 @@ export function extractCore(raw) {
   const strategy = fieldStrategy(text);
   const duration = fieldDuration(basic);
   const opening = fieldOpening(basic);
+  const lock = fieldLock(text);
   const fees = fieldFees(basic);
   const amounts = fieldAmounts(text);
   const performance = fieldPerformance(basic);
@@ -23,13 +24,16 @@ export function extractCore(raw) {
   if (!scope) notes.push("未识别投资范围，请对照合同「主要投资方向」手补。");
   if (performance.mode === "announce") notes.push("合同只写业绩报酬计提基准、未给具体数字，需在下方手填。");
   if (risk.code && !basic.includes(risk.code) && /中低风险|低风险|中风险|中高风险|高风险/.test(basic)) notes.push("合同未写 R 代号，已按风险用语对应。");
-  return { name, type, manager, custodian, scope, ratio, strategy, duration, opening, ...fees, ...amounts, performance, risk, notes };
+  return { name, type, manager, custodian, scope, ratio, strategy, duration, opening, lock, ...fees, ...amounts, performance, risk, notes };
 }
 
 export function composeElements(core, manual) {
   const code = (manual.code || "").trim();
   const name = core.name ? (code ? `${core.name}（产品代码：${code}）` : core.name) : "";
   let opening = core.opening || "";
+  if (core.lock?.days && !new RegExp(`(?:持有满|不得少于)\\s*${core.lock.days}\\s*(?:天|个自然日|个工作日)`).test(opening)) {
+    opening = [opening, `特别的，每笔份额需持有满${core.lock.days}${core.lock.unit}。`].filter(Boolean).join("\n");
+  }
   if (manual.ongoing && (manual.openDate || "").trim()) {
     opening = [opening, `本次开放日\n${manual.openDate.trim()}（若出现合同变更，以管理人公告为准）`].filter(Boolean).join("\n");
   }
@@ -180,6 +184,12 @@ function fieldDuration(basic) {
   if (!m) return "";
   const years = m[1].replace(/\s+/g, "");
   return years.startsWith("自") ? years : `自成立之日起${years.replace(/^自成立之日起/, "")}`;
+}
+
+function fieldLock(text) {
+  const match = String(text || "").match(/(?:每笔份额需持有满|份额持有时间不得少于|持有满)\s*(\d+)\s*(个自然日|个工作日|天)/);
+  if (!match) return null;
+  return { days: match[1], unit: match[2] };
 }
 
 function fieldOpening(basic) {

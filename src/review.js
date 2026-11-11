@@ -1,5 +1,6 @@
 import { planCompanyEdits } from './company.js';
 import { planElementEdits } from './element-review.js';
+import { planLockEdits } from './lock.js';
 import { planManagerEdits } from './managers.js';
 import { planRiskEdits } from './risk.js';
 import { applyParagraphEdits, deleteParagraph, insertParagraphAfter, maxRevisionId } from './revise.js';
@@ -49,8 +50,9 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
     if (edit.deleteParagraphId) skipRisk.add(edit.deleteParagraphId);
   }
   const risk = planRiskEdits(paragraphs, elementRisk, skipRisk);
-  const edits = [...company.edits, ...managers.edits, ...elementPlan.edits, ...risk.edits];
-  const warnings = [...company.warnings, ...managers.warnings, ...elementPlan.warnings, ...risk.warnings];
+  const lock = planLockEdits(paragraphs, elements, skipRisk);
+  const edits = [...company.edits, ...managers.edits, ...elementPlan.edits, ...risk.edits, ...lock.edits];
+  const warnings = [...company.warnings, ...managers.warnings, ...elementPlan.warnings, ...risk.warnings, ...lock.warnings];
   const byParagraph = new Map();
   const blocked = new Set();
   for (const edit of edits) {
@@ -69,7 +71,7 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
   const insertions = edits.filter(edit => edit.insertAfterId && !blocked.has(edit));
   const changed = byParagraph.size + deletions.length + insertions.length > 0;
   if (!changed) {
-    return { fileName, changed: false, bytes, warnings, managers: managers.reviews, companyLabels: [], elementLabels: [], riskUpdated: false, changeCount: 0 };
+    return { fileName, changed: false, bytes, warnings, managers: managers.reviews, companyLabels: [], elementLabels: [], riskUpdated: false, lockUpdated: false, changeCount: 0 };
   }
   let revision = maxRevisionId([...docs.values()]);
   const meta = {
@@ -100,6 +102,7 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
   const companyLabels = [...new Set(edits.filter(edit => edit.source === 'company' && !blocked.has(edit)).map(edit => edit.label))];
   const elementLabels = [...new Set(edits.filter(edit => edit.source === 'element' && !blocked.has(edit)).map(edit => edit.label))];
   const riskUpdated = [...byParagraph.values()].some(list => list.some(edit => edit.source === 'risk'));
+  const lockUpdated = [...byParagraph.values()].some(list => list.some(edit => edit.source === 'lock'));
   return {
     fileName,
     changed: true,
@@ -109,6 +112,7 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
     companyLabels,
     elementLabels,
     riskUpdated,
+    lockUpdated,
     changeCount: [...byParagraph.values()].reduce((total, list) => total + list.length, 0) + deletions.length + insertions.length,
   };
 }

@@ -11,6 +11,7 @@ import { collectParagraphs, parseXml } from '../src/xml.js';
 import { planRiskEdits, parseRiskStatement } from '../src/risk.js';
 import { composeElements, extractCore } from '../src/elements.js';
 import { planElementEdits } from '../src/element-review.js';
+import { planLockEdits } from '../src/lock.js';
 import { binaryDocText, wordKind } from '../src/word.js';
 
 globalThis.DOMParser = DOMParser;
@@ -232,6 +233,39 @@ const factRun = await reviewOnePager({
 check(factRun.elementLabels.includes('产品名称') && !factRun.elementLabels.includes('管理人') && !factRun.elementLabels.includes('存续期'), '真实一页通只改不一致的产品要素');
 const factParagraphs = await visibleParagraphs(factRun.bytes);
 check(factParagraphs.some(paragraph => paragraph.text.includes('产品代码：S12345')), '修订后的产品要素表写入了要素表里的产品名称');
+
+const lockSentence = '7、本产品存在锁定期，委托人每笔份额需持有满180天，可能存在流动性风险。';
+const openingSentence = '特别的，投资者每笔份额持有时间不得少于180天。合同另有约定的，从其约定。';
+const unrelated = '保存期限自基金账户销户之日起不得少于20年。';
+const lockPlan = planLockEdits([
+  { id: 'word/document.xml:0', part: 'word/document.xml', text: lockSentence },
+  { id: 'word/document.xml:1', part: 'word/document.xml', text: openingSentence },
+  { id: 'word/document.xml:2', part: 'word/document.xml', text: unrelated },
+], [{ label: '开放期', value: '每月开放。特别的，每笔份额需持有满90个自然日。' }]);
+check(lockPlan.edits.length === 2 && lockPlan.edits.every(edit => edit.before === '180' && edit.after === '90'), '锁定期和开放期里的天数都改成要素表的天数');
+check(planLockEdits([
+  { id: 'word/document.xml:0', part: 'word/document.xml', text: lockSentence },
+], [{ label: '开放期', value: '每笔份额需持有满180天。' }]).edits.length === 0, '天数已经一致时不改锁定期');
+const withLock = composeElements(
+  { opening: '每月开放。', lock: { days: '180', unit: '个自然日' }, performance: { mode: 'none' }, risk: {} },
+  { channel: 'house' },
+).find(row => row[0] === '开放期')[1];
+check(withLock.includes('持有满180个自然日'), '合同里的锁定期天数写进开放期');
+
+const cycleFile = '/Users/luzhiyuan/Desktop/【一页通202604】君享大类资产全周期1号.docx';
+if (existsSync(cycleFile)) {
+  const cycle = await reviewOnePager({
+    bytes: new Uint8Array(readFileSync(cycleFile)),
+    fileName: '【一页通202604】君享大类资产全周期1号.docx',
+    variant: 'general', records: [], asOf: AS_OF,
+    companyBytes: read('assets/company-introduction-general.docx'),
+    elements: [{ label: '开放期', value: '本集合计划每月开放。特别的，每笔份额需持有满90个自然日。' }],
+  });
+  check(cycle.lockUpdated, '全周期一页通识别了锁定期这句话');
+  const cycleParagraphs = await visibleParagraphs(cycle.bytes);
+  check(cycleParagraphs.some(paragraph => paragraph.text.includes('持有满90天')), '全周期一页通的锁定期改成90天');
+  check(!cycleParagraphs.some(paragraph => paragraph.text.includes('持有满180天')), '全周期一页通不再保留持有满180天');
+}
 
 if (failed) {
   console.error(`\n${failed} checks failed`);

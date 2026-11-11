@@ -510,7 +510,8 @@ function renderResults(results) {
         <p>${item.changed ? `写了 ${item.changeCount} 处修订。` : '介绍、产品要素和风险揭示已经一致，原文件没有改。'}
           ${item.companyLabels.length ? `公司介绍改动：${escapeHtml(item.companyLabels.join('、'))}。` : ''}
           ${item.elementLabels?.length ? `产品要素改动：${escapeHtml(item.elementLabels.join('、'))}。` : ''}
-          ${item.riskUpdated ? '风险揭示已按要素表修改。' : ''}</p>
+          ${item.riskUpdated ? '风险揭示已按要素表修改。' : ''}
+          ${item.lockUpdated ? '锁定期天数已按要素表修改。' : ''}</p>
         ${item.managers.map(manager => `<p><span class="badge ${manager.status}">${manager.status === 'updated' ? '已修改' : manager.status === 'inserted' ? '已补入' : '一致'}</span>${escapeHtml(manager.name)} ${manager.calculations.map(calc => `${calc.label} ${calc.years}`).join(' · ')}</p>${manager.status === 'unchanged' ? '' : `<div class="diff"><del>${escapeHtml(manager.before || '（空）')}</del>\n<ins>${escapeHtml(manager.after)}</ins></div>`}`).join('')}
         ${item.warnings.map(warning => `<p class="warn">${escapeHtml(warning)}</p>`).join('')}
         ${item.changed ? `<button class="primary" type="button" data-download="${index}">下载修订稿</button>` : ''}
@@ -551,7 +552,7 @@ async function runReview() {
       } catch (error) {
         results.push({
           fileName: file.name, changed: false, bytes: new Uint8Array(), warnings: [error.message || '核对失败。'],
-          managers: [], companyLabels: [], elementLabels: [], riskUpdated: false, changeCount: 0,
+          managers: [], companyLabels: [], elementLabels: [], riskUpdated: false, lockUpdated: false, changeCount: 0,
         });
       }
     }
