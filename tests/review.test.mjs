@@ -165,6 +165,15 @@ const elementSheet = await elementZip.file('xl/worksheets/sheet1.xml').async('st
 const elementWorkbook = await elementZip.file('xl/workbook.xml').async('string');
 check(elementWorkbook.includes('产品要素表'), '要素表 Excel 的工作表名是产品要素表');
 check(elementSheet.includes('君享测试') && elementSheet.includes('销售机构风险评级为R3'), '要素表 Excel 写入当前格子里的内容');
+const multiBook = await buildElementWorkbook([
+  { name: '君享年华定开债8号', rows: [['产品名称', '年华8号']] },
+  { name: '君享年华定开债8号', rows: [['产品名称', '年华9号']] },
+]);
+const multiZip = await JSZip.loadAsync(multiBook);
+const multiWorkbook = await multiZip.file('xl/workbook.xml').async('string');
+const secondSheet = await multiZip.file('xl/worksheets/sheet2.xml').async('string');
+check(multiWorkbook.includes('name="君享年华定开债8号"') && multiWorkbook.includes('name="君享年华定开债8号2"'), '多份合同分成不同工作表');
+check(secondSheet.includes('年华9号'), '第二张工作表写入第二份合同的要素');
 
 const docBytes = Uint8Array.from([0xd0, 0xcf, 0x11, 0xe0, ...Buffer.from('集合计划的基本情况\n集合资产管理计划\n', 'utf16le')]);
 check(wordKind(docBytes) === 'doc', '旧版 DOC 按文件头识别');

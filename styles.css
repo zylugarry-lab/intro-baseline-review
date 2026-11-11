@@ -147,6 +147,7 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; }
 .bio { color: #405769; white-space: pre-wrap; }
 .upload-box { border: 1px dashed #a9bfd2; border-radius: 8px; padding: 22px; background: #f7fafc; }
 .file-entry { display: flex; justify-content: space-between; gap: 12px; background: white; border: 1px solid #e2eaf0; border-radius: 6px; padding: 8px 10px; margin-top: 8px; font-size: 13px; }
+.file-entry.active { border-color: var(--blue); background: #f3f8fc; }
 .summary { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 8px; margin: 16px 0; }
 .summary div { padding: 14px 16px; border-right: 1px solid var(--line); }
 .summary div:last-child { border: 0; }

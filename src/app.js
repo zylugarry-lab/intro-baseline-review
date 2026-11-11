@@ -27,6 +27,8 @@ const state = {
   companyBase: { general: {}, ccb: {} },
   openCard: null,
   onePagers: [],
+  contracts: [],
+  activeId: null,
   contractName: '',
   core: null,
   elements: null,
@@ -101,15 +103,19 @@ function emptyDraft() {
 }
 
 function elementPayload() {
-  if (!state.elements) return null;
+  if (!state.contracts.length) return null;
   return {
-    contractName: state.contractName,
-    rows: state.elements,
-    core: state.core,
-    manual: state.manual,
-    nameTouched: state.nameTouched,
-    riskTouched: state.riskTouched,
-    notes: state.elementNotes,
+    activeId: state.activeId,
+    contracts: state.contracts.map(contract => ({
+      id: contract.id,
+      name: contract.name,
+      rows: contract.rows,
+      core: contract.core,
+      manual: contract.manual,
+      nameTouched: contract.nameTouched,
+      riskTouched: contract.riskTouched,
+      notes: contract.notes,
+    })),
   };
 }
 
@@ -381,26 +387,96 @@ function setElementValue(label, value) {
   if (row) row.value = value;
 }
 
+function activeContract() {
+  return state.contracts.find(contract => contract.id === state.activeId) || null;
+}
+
+function contractTitle(contract) {
+  const product = contract.rows.find(row => row.label === '产品名称')?.value?.split('\n')[0] || '';
+  return product || contract.name.replace(/\.docx?$/i, '');
+}
+
+function elementSheetName(contract, index, used) {
+  const base = contractTitle(contract).replace(/[\\/?*[\]:]/g, '').replace(/\s+/g, '') || `产品${index + 1}`;
+  let name = base.slice(0, 31);
+  let suffix = 2;
+  while (used.has(name)) {
+    const tail = String(suffix);
+    name = `${base.slice(0, 31 - tail.length)}${tail}`;
+    suffix += 1;
+  }
+  used.add(name);
+  return name;
+}
+
+function elementFileStem(contract) {
+  return contractTitle(contract).replace(/[\\/:*?"<>|\r\n]/g, '').slice(0, 80) || '产品要素表';
+}
+
+function activateContract(id) {
+  const contract = state.contracts.find(item => item.id === id);
+  if (!contract) {
+    state.activeId = null;
+    state.contractName = '';
+    state.core = null;
+    state.elements = null;
+    state.elementNotes = [];
+    state.manual = { code: '', salesCode: '' };
+    state.nameTouched = false;
+    state.riskTouched = false;
+    return;
+  }
+  state.activeId = contract.id;
+  state.contractName = contract.name;
+  state.core = contract.core;
+  state.elements = contract.rows;
+  state.elementNotes = contract.notes;
+  state.manual = contract.manual;
+  state.nameTouched = contract.nameTouched;
+  state.riskTouched = contract.riskTouched;
+}
+
+function refreshContract(contract) {
+  if (!contract?.core) return;
+  const generated = new Map(composeElements(contract.core, {
+    code: contract.manual.code || '',
+    salesCode: contract.manual.salesCode || '',
+    channel: channel(),
+    perfMode: 'auto',
+  }));
+  const write = (label, value) => {
+    const row = contract.rows.find(item => item.label === label);
+    if (row) row.value = value || '';
+  };
+  if (!contract.nameTouched) write('产品名称', generated.get('产品名称'));
+  if (!contract.riskTouched) write('产品风险等级', generated.get('产品风险等级'));
+}
+
 function applyGeneratedRows() {
-  if (!state.core || !state.elements) return;
-  const generated = new Map(composeElements(state.core, currentManual()));
-  if (!state.nameTouched) setElementValue('产品名称', generated.get('产品名称') || '');
-  if (!state.riskTouched) setElementValue('产品风险等级', generated.get('产品风险等级') || '');
+  refreshContract(activeContract());
 }
 
 function renderElements() {
   const panel = $('element-panel');
-  panel.hidden = !state.elements;
-  $('contract-name').textContent = state.contractName ? `当前合同：${state.contractName}` : '';
-  if (!state.elements) return;
-  $('product-code').value = state.manual.code || '';
-  $('sales-risk').value = state.manual.salesCode || '';
+  panel.hidden = state.contracts.length === 0;
+  const active = activeContract();
+  $('contract-name').textContent = state.contracts.length
+    ? `已提取 ${state.contracts.length} 份。当前用于一页通的是：${active ? contractTitle(active) : '未选择'}`
+    : '';
+  $('contract-list').innerHTML = state.contracts.map(contract => `
+    <div class="file-entry${contract.id === state.activeId ? ' active' : ''}">
+      <button type="button" class="text-button" data-open-contract="${escapeHtml(contract.id)}">${escapeHtml(contractTitle(contract))}</button>
+      <button type="button" class="text-button" data-remove-contract="${escapeHtml(contract.id)}">移除</button>
+    </div>`).join('');
+  if (!active) return;
+  $('product-code').value = active.manual.code || '';
+  $('sales-risk').value = active.manual.salesCode || '';
   $('risk-channel-note').textContent = state.variant === 'ccb'
-    ? '风险话术目前按建行版：代销机构口径，适合的投资者写成 C 型列表。换上面的公司介绍版本会重写这句；手改过风险格之后不再自动覆盖。'
-    : '风险话术目前按通用版：销售机构口径，适合的投资者写成 C 至 C5。换上面的公司介绍版本会重写这句；手改过风险格之后不再自动覆盖。';
-  $('element-notes').innerHTML = state.elementNotes.map(note => `<p class="warn">${escapeHtml(note)}</p>`).join('');
+    ? '风险话术目前按建行版。换公司介绍版本会重写还没手改过的风险格。下载 Excel 时，每份合同各占一个工作表。'
+    : '风险话术目前按通用版。换公司介绍版本会重写还没手改过的风险格。下载 Excel 时，每份合同各占一个工作表。';
+  $('element-notes').innerHTML = active.notes.map(note => `<p class="warn">${escapeHtml(note)}</p>`).join('');
   const tall = new Set(['投资范围', '投资策略', '投资比例', '业绩报酬', '产品风险等级', '开放期']);
-  $('element-table').innerHTML = `<table class="element-table"><tbody>${state.elements.map(row => `
+  $('element-table').innerHTML = `<table class="element-table"><tbody>${active.rows.map(row => `
     <tr>
       <th>${escapeHtml(row.label)}</th>
       <td><textarea data-element="${escapeHtml(row.label)}" rows="${tall.has(row.label) ? 4 : 2}">${escapeHtml(row.value)}</textarea></td>
@@ -409,14 +485,23 @@ function renderElements() {
 }
 
 function restoreElements(saved) {
-  if (!saved?.rows) return;
-  state.contractName = saved.contractName || '';
-  state.core = saved.core || null;
-  state.elements = saved.rows.map(row => ({ label: row.label, value: row.value || '' }));
-  state.manual = { code: saved.manual?.code || '', salesCode: saved.manual?.salesCode || '' };
-  state.nameTouched = Boolean(saved.nameTouched);
-  state.riskTouched = Boolean(saved.riskTouched);
-  state.elementNotes = Array.isArray(saved.notes) ? saved.notes : [];
+  const source = Array.isArray(saved?.contracts)
+    ? saved.contracts
+    : saved?.rows
+      ? [{ id: 'saved', name: saved.contractName || '合同', rows: saved.rows, core: saved.core, manual: saved.manual, nameTouched: saved.nameTouched, riskTouched: saved.riskTouched, notes: saved.notes }]
+      : [];
+  state.contracts = source.map((contract, index) => ({
+    id: String(contract.id || `contract-${index}`),
+    name: contract.name || '合同',
+    rows: (contract.rows || []).map(row => ({ label: row.label, value: row.value || '' })),
+    core: contract.core || null,
+    manual: { code: contract.manual?.code || '', salesCode: contract.manual?.salesCode || '' },
+    nameTouched: Boolean(contract.nameTouched),
+    riskTouched: Boolean(contract.riskTouched),
+    notes: Array.isArray(contract.notes) ? contract.notes : [],
+  }));
+  const active = state.contracts.find(contract => contract.id === saved?.activeId) || state.contracts[0];
+  if (active) activateContract(active.id);
   renderElements();
 }
 
@@ -430,30 +515,41 @@ async function contractPlainText(bytes) {
   throw new Error('请上传 Word 合同（.doc 或 .docx）。');
 }
 
-async function readContract(file) {
+async function readContracts(files) {
   $('contract-error').hidden = true;
-  if (!/\.docx?$/i.test(file.name)) {
-    $('contract-error').hidden = false;
-    $('contract-error').textContent = '请上传 Word 合同（.doc 或 .docx）。';
-    return;
+  const errors = [];
+  $('contract-name').textContent = `正在读取 ${files.length} 份合同…`;
+  for (const file of files) {
+    if (!/\.docx?$/i.test(file.name)) {
+      errors.push(`${file.name}：请上传 Word 合同（.doc 或 .docx）。`);
+      continue;
+    }
+    try {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const core = extractCore(await contractPlainText(bytes));
+      const contract = {
+        id: `contract-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: file.name,
+        core,
+        manual: { code: '', salesCode: '' },
+        nameTouched: false,
+        riskTouched: false,
+        notes: core.notes || [],
+        rows: [],
+      };
+      contract.rows = composeElements(core, { ...contract.manual, channel: channel(), perfMode: 'auto' }).map(([label, value]) => ({ label, value }));
+      state.contracts.push(contract);
+      if (!state.activeId) activateContract(contract.id);
+    } catch (error) {
+      errors.push(`${file.name}：${error.message || '合同没有读出来。'}`);
+    }
   }
-  try {
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const text = await contractPlainText(bytes);
-    const core = extractCore(text);
-    state.core = core;
-    state.contractName = file.name;
-    state.manual = { code: '', salesCode: '' };
-    state.nameTouched = false;
-    state.riskTouched = false;
-    state.elementNotes = core.notes || [];
-    state.elements = composeElements(core, currentManual()).map(([label, value]) => ({ label, value }));
-    renderElements();
-    await persistDraft();
-  } catch (error) {
+  if (errors.length) {
     $('contract-error').hidden = false;
-    $('contract-error').textContent = error.message || '合同没有读出来。';
+    $('contract-error').textContent = errors.join(' ');
   }
+  renderElements();
+  await persistDraft();
 }
 
 function bindDrop(element, onFiles) {
@@ -627,9 +723,10 @@ function bind() {
   $('variant').addEventListener('change', () => {
     state.variant = $('variant').value;
     localStorage.setItem('intro-variant', state.variant);
-    applyGeneratedRows();
+    state.contracts.forEach(refreshContract);
     renderElements();
     renderOnePagers();
+    scheduleSave();
   });
   $('manager-search').addEventListener('input', renderManagers);
   document.querySelector('.cards').addEventListener('click', event => {
@@ -641,9 +738,10 @@ function bind() {
       state.variant = state.openCard;
       $('variant').value = state.variant;
       localStorage.setItem('intro-variant', state.variant);
-      applyGeneratedRows();
+      state.contracts.forEach(refreshContract);
       renderElements();
       renderOnePagers();
+      scheduleSave();
     }
     applyOpenCard();
   });
@@ -696,11 +794,26 @@ function bind() {
   $('download-ccb').addEventListener('click', () => downloadCompany('ccb'));
   $('onepager-file').addEventListener('change', event => { addOnePagers(event.target.files); event.target.value = ''; });
   $('contract-file').addEventListener('change', event => {
-    const file = event.target.files?.[0];
+    const files = [...(event.target.files || [])];
     event.target.value = '';
-    if (file) readContract(file);
+    if (files.length) readContracts(files);
   });
-  bindDrop($('contract-drop'), files => { if (files[0]) readContract(files[0]); });
+  bindDrop($('contract-drop'), files => { if (files.length) readContracts(files); });
+  $('contract-list').addEventListener('click', event => {
+    const open = event.target.closest('[data-open-contract]');
+    const remove = event.target.closest('[data-remove-contract]');
+    if (open) {
+      activateContract(open.dataset.openContract);
+      renderElements();
+      scheduleSave();
+    }
+    if (remove) {
+      state.contracts = state.contracts.filter(contract => contract.id !== remove.dataset.removeContract);
+      if (state.activeId === remove.dataset.removeContract) activateContract(state.contracts[0]?.id);
+      renderElements();
+      scheduleSave();
+    }
+  });
   $('product-code').addEventListener('input', () => {
     state.manual.code = $('product-code').value;
     applyGeneratedRows();
@@ -719,22 +832,39 @@ function bind() {
   });
   $('reset-risk').addEventListener('click', () => {
     state.riskTouched = false;
+    const contract = activeContract();
+    if (contract) contract.riskTouched = false;
     applyGeneratedRows();
     renderElements();
     scheduleSave();
   });
   $('download-elements').addEventListener('click', async () => {
-    if (!state.elements?.length) return;
-    const stem = (state.contractName || '产品要素表').replace(/\.docx?$/i, '').replace(/[\\/:*?"<>|\r\n]/g, '').slice(0, 80);
-    const bytes = await buildElementWorkbook(state.elements.map(row => [row.label, row.value]));
-    saveBlob(bytes, `${stem}-产品要素表.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    if (!state.contracts.length) return;
+    const used = new Set();
+    const sheets = state.contracts.map((contract, index) => ({
+      name: elementSheetName(contract, index, used),
+      rows: contract.rows.map(row => [row.label, row.value]),
+    }));
+    const bytes = await buildElementWorkbook(sheets);
+    const fileName = state.contracts.length === 1
+      ? `${elementFileStem(state.contracts[0])}-产品要素表.xlsx`
+      : `产品要素表-${state.contracts.length}只.xlsx`;
+    saveBlob(bytes, fileName, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   });
   $('element-table').addEventListener('input', event => {
     const label = event.target?.dataset?.element;
     if (!label) return;
     setElementValue(label, event.target.value);
-    if (label === '产品名称') state.nameTouched = true;
-    if (label === '产品风险等级') state.riskTouched = true;
+    if (label === '产品名称') {
+      state.nameTouched = true;
+      const contract = activeContract();
+      if (contract) contract.nameTouched = true;
+    }
+    if (label === '产品风险等级') {
+      state.riskTouched = true;
+      const contract = activeContract();
+      if (contract) contract.riskTouched = true;
+    }
     renderOnePagers();
     scheduleSave();
   });

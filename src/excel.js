@@ -187,30 +187,55 @@ export function buildManagerWorkbook(records) {
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
 }
 
-export function buildElementWorkbook(rows) {
+export function buildElementWorkbook(sheets) {
+  const list = normalizeElementSheets(sheets);
+  const files = {
+    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="${NS.ct}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>${list.map((_, index) => `<Override PartName="/xl/worksheets/sheet${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('')}<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
+    '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="${NS.pr}"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+    'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="${NS.ss}" xmlns:r="${NS.rel}"><sheets>${list.map((sheet, index) => `<sheet name="${escapeXml(sheet.name)}" sheetId="${index + 1}" r:id="rId${index + 1}"/>`).join('')}</sheets></workbook>`,
+    'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="${NS.pr}">${list.map((_, index) => `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${index + 1}.xml"/>`).join('')}<Relationship Id="rId${list.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
+    'xl/styles.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="${NS.ss}"><fonts count="2"><font><sz val="11"/><color rgb="FF222222"/><name val="微软雅黑"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="微软雅黑"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF105C8F"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7E9EF"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf></cellXfs></styleSheet>`,
+  };
+  list.forEach((sheet, index) => { files[`xl/worksheets/sheet${index + 1}.xml`] = elementSheetXml(sheet.rows); });
+  const zip = new globalThis.JSZip();
+  for (const [path, content] of Object.entries(files)) zip.file(path, content);
+  return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+}
+
+function normalizeElementSheets(sheets) {
+  const source = !sheets?.length ? [{ name: '产品要素表', rows: [] }]
+    : Array.isArray(sheets[0]) ? [{ name: '产品要素表', rows: sheets }]
+      : sheets;
+  const used = new Set();
+  return source.map((sheet, index) => ({ name: uniqueSheetName(sheet.name, index, used), rows: sheet.rows || [] }));
+}
+
+function uniqueSheetName(name, index, used) {
+  const cleaned = String(name || `产品${index + 1}`).replace(/[\\/?*[\]:]/g, '').replace(/^\s+|\s+$/g, '').slice(0, 31) || `产品${index + 1}`;
+  let next = cleaned;
+  let suffix = 2;
+  while (used.has(next)) {
+    const tail = String(suffix);
+    next = `${cleaned.slice(0, 31 - tail.length)}${tail}`;
+    suffix += 1;
+  }
+  used.add(next);
+  return next;
+}
+
+function elementSheetXml(rows) {
   const body = rows.map((pair, index) => {
     const row = index + 1;
     const height = Math.min(120, 22 + Math.ceil(String(pair[1] || '').length / 42) * 15);
     return `<row r="${row}" ht="${height}" customHeight="1"><c r="A${row}" t="inlineStr" s="1"><is><t xml:space="preserve">${escapeXml(pair[0])}</t></is></c><c r="B${row}" t="inlineStr" s="2"><is><t xml:space="preserve">${escapeXml(pair[1])}</t></is></c></row>`;
   }).join('');
-  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="${NS.ss}"><cols><col min="1" max="1" width="18" customWidth="1"/><col min="2" max="2" width="88" customWidth="1"/></cols><sheetData>${body}</sheetData></worksheet>`;
-  const files = {
-    '[Content_Types].xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Types xmlns="${NS.ct}"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>`,
-    '_rels/.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="${NS.pr}"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
-    'xl/workbook.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="${NS.ss}" xmlns:r="${NS.rel}"><sheets><sheet name="产品要素表" sheetId="1" r:id="rId1"/></sheets></workbook>`,
-    'xl/_rels/workbook.xml.rels': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<Relationships xmlns="${NS.pr}"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`,
-    'xl/styles.xml': `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<styleSheet xmlns="${NS.ss}"><fonts count="2"><font><sz val="11"/><color rgb="FF222222"/><name val="微软雅黑"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="微软雅黑"/></font></fonts><fills count="4"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF105C8F"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE7E9EF"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="3"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="3" borderId="0" xfId="0" applyFont="1" applyFill="1" applyAlignment="1"><alignment horizontal="left" vertical="center" wrapText="1"/></xf></cellXfs></styleSheet>`,
-    'xl/worksheets/sheet1.xml': sheet,
-  };
-  const zip = new globalThis.JSZip();
-  for (const [path, content] of Object.entries(files)) zip.file(path, content);
-  return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
 }
 
 function columnName(index) {
