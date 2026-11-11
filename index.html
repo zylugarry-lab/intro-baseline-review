@@ -3,23 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>介绍底稿核对</title>
-  <link rel="stylesheet" href="./styles.css?v=10">
+  <title>要素与介绍核对</title>
+  <link rel="stylesheet" href="./styles.css?v=11">
 </head>
 <body>
   <header class="topbar">
     <div class="brand">
       <div class="brand-mark">介</div>
-      <div>介绍底稿核对<small>BASELINE REVIEW</small></div>
+      <div>要素与介绍核对<small>MATERIAL REVIEW</small></div>
     </div>
     <div class="local"><i></i>只在本机浏览器处理，不会上传</div>
   </header>
   <main>
     <section class="intro">
       <div>
-        <p class="eyebrow">内容底稿为准 · 一页通留修订</p>
-        <h1>先维护底稿，再改一页通。</h1>
-        <p>经理年限按制作日期减去从业日期或投资起始日期自动重算。公司介绍和经理简介在这一页直接改，再选择通用版或建行版去对一页通。对不上的介绍写成 Word 修订，改完可以下载。</p>
+        <p class="eyebrow">合同要素 · 内容底稿 · 一页通留修订</p>
+        <h1>先提要素，再改一页通。</h1>
+        <p>上传合同得到要素表。公司介绍和经理简介仍在这一页改，年限按制作日期重算。核对一页通时，介绍对不上的地方，以及最下面的风险揭示，会按要素和底稿写成 Word 修订，改完可以下载。</p>
       </div>
       <div class="date-card">
         <label for="as-of">本次制作日期</label>
@@ -29,14 +29,46 @@
       </div>
     </section>
     <ol class="steps">
-      <li><a href="#baseline"><b>01</b>内容底稿</a></li>
-      <li><a href="#compare"><b>02</b>对照一页通</a></li>
+      <li><a href="#contract"><b>01</b>合同要素</a></li>
+      <li><a href="#baseline"><b>02</b>内容底稿</a></li>
+      <li><a href="#compare"><b>03</b>对照一页通</a></li>
     </ol>
+
+    <section class="panel" id="contract">
+      <h2>第一步 · 从合同提取要素</h2>
+      <p class="lede">上传集合计划合同 docx。要素表可以直接改。产品风险等级会带到第三步：一页通里的风险等级，包括最下面的风险揭示，会改成和这格一致。销售机构如果另外给了评级，在这里选上，底部那句会跟着改。</p>
+      <div class="upload-box drop" id="contract-drop">
+        <strong>集合计划合同</strong>
+        <p class="lede">docx。文件只在这台浏览器里读取。</p>
+        <label class="file-button">选择合同<input id="contract-file" type="file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"></label>
+        <p id="contract-name" class="lede" style="margin:8px 0 0"></p>
+      </div>
+      <div id="contract-error" class="error" hidden></div>
+      <div id="element-panel" hidden>
+        <div class="element-tools">
+          <label>产品代码<input id="product-code" type="text" autocomplete="off"></label>
+          <label>销售机构风险评级
+            <select id="sales-risk">
+              <option value="">不单列</option>
+              <option value="R1">R1 低风险</option>
+              <option value="R2">R2 中低风险</option>
+              <option value="R3">R3 中风险</option>
+              <option value="R4">R4 中高风险</option>
+              <option value="R5">R5 高风险</option>
+            </select>
+          </label>
+          <button id="reset-risk" class="text-button" type="button">按合同重写风险表述</button>
+        </div>
+        <p class="lede" id="risk-channel-note"></p>
+        <div id="element-notes"></div>
+        <div id="element-table"></div>
+      </div>
+    </section>
 
     <section class="panel" id="baseline">
       <div class="version-row">
         <div>
-          <h2>第一步 · 内容底稿</h2>
+          <h2>第二步 · 内容底稿</h2>
           <p class="lede">先只显示这三张卡片。点开一张，这一块在下面整页展开。年限按制作日期自动重算，改动保存在这台浏览器里。</p>
         </div>
         <div>
@@ -96,8 +128,8 @@
     </section>
 
     <section class="panel" id="compare">
-      <h2>第二步 · 和一页通比对</h2>
-      <p class="lede">上传一份或多份一页通 docx。页面只用当前选择的公司介绍版本，以及按制作日期刷新年限后的经理简介。一致的段落不动，对不上的地方写成 Word 修订。</p>
+      <h2>第三步 · 和一页通比对</h2>
+      <p class="lede">上传一份或多份一页通 docx。公司介绍和经理简介对不上的地方会改。要素表里的产品风险等级，会同步到一页通的风险等级和最下面的风险揭示，销售机构另给的评级也写进去。改动都是 Word 修订，可以下载。</p>
       <div class="upload-box drop" id="onepager-drop">
         <strong>一页通</strong>
         <p class="lede">docx，可多选。旧的修订会在被改到的段落里先接受，再写下这一轮的修订；没改到的段落保持原样。</p>
@@ -117,6 +149,6 @@
     <span>建行版不写“全面领先”和“资本实力位居行业最前列”。</span>
   </footer>
   <script src="./vendor/jszip.min.js"></script>
-  <script type="module" src="./src/app.js?v=10"></script>
+  <script type="module" src="./src/app.js?v=11"></script>
 </body>
 </html>

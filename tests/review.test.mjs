@@ -8,6 +8,8 @@ import { readDocxParagraphs, reviewOnePager } from '../src/review.js';
 import { textDiff } from '../src/diff.js';
 import { applyParagraphEdits } from '../src/revise.js';
 import { collectParagraphs, parseXml } from '../src/xml.js';
+import { planRiskEdits, parseRiskStatement } from '../src/risk.js';
+import { composeElements } from '../src/elements.js';
 
 globalThis.DOMParser = DOMParser;
 globalThis.XMLSerializer = XMLSerializer;
@@ -105,6 +107,54 @@ const editedCompany = await reviewOnePager({
   companyTextById: { [ccbShare.id]: generalShare.text },
 });
 check(!editedCompany.companyLabels.includes('股东介绍'), '网页上改过的公司介绍会用于比对');
+
+const riskCell = composeElements(
+  { risk: { code: 'R2', word: '中低风险' }, name: '测试产品', performance: { mode: 'none' } },
+  { channel: 'house', salesCode: 'R3', code: '' },
+).find(row => row[0] === '产品风险等级')[1];
+check(riskCell.includes('评定为R2（中低风险）') && riskCell.includes('该产品销售机构风险评级为R3（中风险）'), '要素表风险话术带上销售机构评级');
+const parsedRisk = parseRiskStatement(riskCell);
+check(parsedRisk.code === 'R2' && parsedRisk.salesCode === 'R3', '从要素话术里分出管理人等级和销售机构等级');
+
+const bottom = '5、管理人对于本集合计划的风险等级评定为R3（中风险），适合合格投资者中的专业投资者以及风险承受能力为C3-C5的普通投资者，产品风险等级以销售机构为准。';
+const top = 'R2 (中低风险)，销售机构对于本集合计划的风险等级评定以销售机构发布为准。该产品销售机构风险评级为 R4(中高风险)。';
+const noise = '1、本资料仅为宣传材料，具体以风险揭示书为准。投资有风险，入市须谨慎。';
+const riskEdits = planRiskEdits([
+  { id: 'word/document.xml:0', part: 'word/document.xml', text: top },
+  { id: 'word/document.xml:1', part: 'word/document.xml', text: bottom },
+  { id: 'word/document.xml:2', part: 'word/document.xml', text: noise },
+], riskCell).edits;
+check(riskEdits.length === 2, '只改两处风险等级表述');
+const topAfter = riskEdits.find(edit => edit.before.startsWith('R2')).after;
+const bottomAfter = riskEdits.find(edit => edit.before.startsWith('5、')).after;
+check(topAfter.includes('R2(中低风险)') && topAfter.includes('R3(中风险)') && !topAfter.includes('R4'), '要素格里的销售机构评级改成 R3');
+check(bottomAfter.includes('评定为R2（中低风险）') && bottomAfter.includes('C2-C5') && bottomAfter.includes('该产品销售机构风险评级为R3（中风险）'), '底部风险揭示跟着要素改等级和销售机构评级');
+check(planRiskEdits([{ id: 'word/document.xml:1', part: 'word/document.xml', text: bottomAfter }], riskCell).edits.length === 0, '已经一致时不再改');
+
+const ccbRisk = composeElements(
+  { risk: { code: 'R2', word: '中低风险' }, performance: { mode: 'none' } },
+  { channel: 'ccb', salesCode: '', code: '' },
+).find(row => row[0] === '产品风险等级')[1];
+const ccbSentence = '管理人对于本集合计划的风险等级评定为R3（中风险），适合合格投资者中的专业投资者以及风险承受能力为C3（平衡型）、C4（进取型）、C5（激进型）的普通投资者。代销机构对本集合计划的风险等级评定以代销机构发布为准。';
+const ccbAfter = planRiskEdits([{ id: 'word/document.xml:0', part: 'word/document.xml', text: ccbSentence }], ccbRisk).edits[0].after;
+check(ccbAfter.includes('评定为R2（中低风险）'), '建行句保留代号在前的写法');
+check(ccbAfter.includes('C2（稳健型）、C3（平衡型）、C4（进取型）、C5（激进型）'), '适合的投资者从 C2 起');
+
+const split = planRiskEdits([
+  { id: 'word/document.xml:0', part: 'word/document.xml', text: '管理人对于本集合计划的风险等级评定为R2（中低风险），适合向合格投资者中的专业投资者和风险承受能力评估结果为C2-C5的普通' },
+  { id: 'word/document.xml:1', part: 'word/document.xml', text: '投资者销售，销售机构对本集合计划的风险等级评定以销售机构发布为准。' },
+], riskCell).edits;
+check(split.some(edit => edit.before.startsWith('投资者') && edit.after.includes('该产品销售机构风险评级为R3')), '断行的后半句补上销售机构评级');
+
+const riskRun = await reviewOnePager({
+  bytes: read(onePagers[2]), fileName: onePagers[2], variant: 'general', records: managers.records, asOf: AS_OF,
+  companyBytes: read('assets/company-introduction-general.docx'), elementRisk: riskCell,
+});
+check(riskRun.riskUpdated, '一页通风险揭示被改写');
+const riskParagraphs = await visibleParagraphs(riskRun.bytes);
+check(riskParagraphs.some(paragraph => paragraph.text.includes('评定为R2（中低风险）') && paragraph.text.includes('该产品销售机构风险评级为R3（中风险）')), '修订稿里的风险揭示已换成要素等级');
+const riskXml = await JSZip.loadAsync(riskRun.bytes).then(zip => zip.file('word/document.xml').async('string'));
+check(riskXml.includes('w:del') && riskXml.includes('w:ins'), '风险修改保留修订标记');
 
 if (failed) {
   console.error(`\n${failed} checks failed`);

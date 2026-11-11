@@ -1,5 +1,6 @@
 import { planCompanyEdits } from './company.js';
 import { planManagerEdits } from './managers.js';
+import { planRiskEdits } from './risk.js';
 import { applyParagraphEdits, deleteParagraph, insertParagraphAfter, maxRevisionId } from './revise.js';
 import { collectParagraphs, parseXml, serializeXml, NS } from './xml.js';
 
@@ -17,7 +18,7 @@ export async function readDocxParagraphs(bytes) {
   return collectParagraphs(doc, 'word/document.xml');
 }
 
-export async function reviewOnePager({ bytes, fileName, companyBytes, variant, records, asOf, author = '介绍底稿', companyTextById = null }) {
+export async function reviewOnePager({ bytes, fileName, companyBytes, variant, records, asOf, author = '介绍底稿', companyTextById = null, elementRisk = '' }) {
   if (!/\.docx$/i.test(fileName || '')) throw new Error('一页通请使用 docx 文件。');
   const sourceParagraphs = await readDocxParagraphs(companyBytes);
   if (companyTextById) {
@@ -37,8 +38,9 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
   }
   const company = planCompanyEdits(sourceParagraphs, paragraphs, variant);
   const managers = planManagerEdits(paragraphs, records, asOf);
-  const edits = [...company.edits, ...managers.edits];
-  const warnings = [...company.warnings, ...managers.warnings];
+  const risk = planRiskEdits(paragraphs, elementRisk);
+  const edits = [...company.edits, ...managers.edits, ...risk.edits];
+  const warnings = [...company.warnings, ...managers.warnings, ...risk.warnings];
   const byParagraph = new Map();
   const blocked = new Set();
   for (const edit of edits) {
@@ -57,7 +59,7 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
   const insertions = edits.filter(edit => edit.insertAfterId && !blocked.has(edit));
   const changed = byParagraph.size + deletions.length + insertions.length > 0;
   if (!changed) {
-    return { fileName, changed: false, bytes, warnings, managers: managers.reviews, companyLabels: [], changeCount: 0 };
+    return { fileName, changed: false, bytes, warnings, managers: managers.reviews, companyLabels: [], riskUpdated: false, changeCount: 0 };
   }
   let revision = maxRevisionId([...docs.values()]);
   const meta = {
@@ -85,7 +87,8 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
   for (const [part, doc] of docs) zip.file(part, serializeXml(doc));
   await ensureTracking(zip);
   const output = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
-  const companyLabels = [...new Set(edits.filter(edit => edit.source === 'company').map(edit => edit.label))];
+  const companyLabels = [...new Set(edits.filter(edit => edit.source === 'company' && !blocked.has(edit)).map(edit => edit.label))];
+  const riskUpdated = [...byParagraph.values()].some(list => list.some(edit => edit.source === 'risk'));
   return {
     fileName,
     changed: true,
@@ -93,6 +96,7 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
     warnings,
     managers: managers.reviews,
     companyLabels,
+    riskUpdated,
     changeCount: [...byParagraph.values()].reduce((total, list) => total + list.length, 0) + deletions.length + insertions.length,
   };
 }

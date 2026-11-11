@@ -52,7 +52,11 @@ h1 { margin: 0 0 8px; font-size: 34px; line-height: 1.25; letter-spacing: -.03em
 .panel { background: white; border: 1px solid var(--line); border-radius: 10px; padding: 26px 28px; margin-bottom: 22px; }
 .panel h2 { margin: 0 0 4px; font-size: 20px; }
 .lede { margin: 0 0 18px; color: var(--muted); font-size: 13px; }
-.version-row, .toolbar { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 16px; }
+.version-row, .toolbar, .element-tools { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 16px; }
+.element-tools { justify-content: flex-start; align-items: flex-end; flex-wrap: wrap; margin-top: 16px; }
+.element-tools label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+.element-tools input, .element-tools select { min-width: 180px; }
+.element-table textarea { width: 100%; min-height: 46px; }
 .version-row label { color: var(--muted); font-size: 13px; margin-right: 8px; }
 select, .search {
   border: 1px solid var(--line); border-radius: 6px; background: white; color: var(--deep); padding: 8px 10px;
@@ -122,7 +126,7 @@ input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .clause { background: #f7fafc; border-radius: 6px; padding: 12px 14px; margin: 0 0 8px; }
 .clause b { display: block; color: var(--muted); font-size: 11px; font-weight: 600; margin-bottom: 4px; }
 .note { margin: 0 0 8px; }
-.cell-input, .bio-input, .clause textarea, .note textarea {
+.cell-input, .bio-input, .clause textarea, .note textarea, .element-table textarea {
   width: 100%;
   border: 1px solid #d5e1ea;
   border-radius: 6px;
@@ -162,7 +166,7 @@ th { color: var(--muted); font-weight: 600; font-size: 12px; }
 .error { background: #fff3ed; border: 1px solid #eccaba; color: #8a3d24; padding: 12px 14px; border-radius: 8px; }
 footer { max-width: 1180px; margin: 0 auto; padding: 8px 28px 28px; color: #8a9bab; font-size: 12px; display: flex; justify-content: space-between; gap: 16px; }
 @media (max-width: 860px) {
-  .intro, .cards, .company-columns, .summary, .version-row, .toolbar, .manager-card { display: block; }
+  .intro, .cards, .company-columns, .summary, .version-row, .toolbar, .element-tools, .manager-card { display: block; }
   .date-card { border: 0; padding: 16px 0 0; }
   .card, .summary div { margin-top: 10px; }
   h1 { font-size: 28px; }

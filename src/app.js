@@ -1,6 +1,8 @@
 import { companySections, selectVariant, COMPANY_LABELS } from './company.js';
+import { composeElements, extractCore } from './elements.js';
 import { buildManagerWorkbook, parseManagerWorkbook } from './excel.js';
 import { downloadName, readDocxParagraphs, reviewOnePager } from './review.js';
+import { applySalesRating } from './risk.js';
 import { readStored, removeStored, writeStored } from './store.js';
 import { refreshBiography, shanghaiToday } from './years.js';
 
@@ -24,6 +26,13 @@ const state = {
   companyBase: { general: {}, ccb: {} },
   openCard: null,
   onePagers: [],
+  contractName: '',
+  core: null,
+  elements: null,
+  elementNotes: [],
+  manual: { code: '', salesCode: '' },
+  nameTouched: false,
+  riskTouched: false,
 };
 
 const $ = id => document.getElementById(id);
@@ -87,7 +96,20 @@ function companyDiff(variant) {
 }
 
 function emptyDraft() {
-  return { company: { general: {}, ccb: {} }, records: null };
+  return { company: { general: {}, ccb: {} }, records: null, elements: null };
+}
+
+function elementPayload() {
+  if (!state.elements) return null;
+  return {
+    contractName: state.contractName,
+    rows: state.elements,
+    core: state.core,
+    manual: state.manual,
+    nameTouched: state.nameTouched,
+    riskTouched: state.riskTouched,
+    notes: state.elementNotes,
+  };
 }
 
 async function loadDraft() {
@@ -98,6 +120,7 @@ async function loadDraft() {
       ccb: stored?.company?.ccb || {},
     },
     records: Array.isArray(stored?.records) ? stored.records.map(normalizeRecord) : null,
+    elements: stored?.elements || null,
   };
 }
 
@@ -131,8 +154,9 @@ async function persistDraft() {
   const draft = {
     company: { general: companyDiff('general'), ccb: companyDiff('ccb') },
     records: recordsDiffer() ? state.records.map(cloneRecord) : null,
+    elements: elementPayload(),
   };
-  const untouched = !draft.records && !Object.keys(draft.company.general).length && !Object.keys(draft.company.ccb).length;
+  const untouched = !draft.records && !draft.elements && !Object.keys(draft.company.general).length && !Object.keys(draft.company.ccb).length;
   if (untouched) await removeStored(DRAFT_KEY);
   else await writeStored(DRAFT_KEY, draft);
   meta();
@@ -189,8 +213,9 @@ function spliceClause(variant, entry, nextText) {
 
 async function reload() {
   $('baseline-error').hidden = true;
+  const draft = await loadDraft();
+  restoreElements(draft.elements);
   try {
-    const draft = await loadDraft();
     state.files.managers = await loadBytes('managers');
     state.files.general = await loadBytes('general');
     state.files.ccb = await loadBytes('ccb');
@@ -209,7 +234,7 @@ async function reload() {
     }
     meta();
     const edited = recordsDiffer() || Object.keys(companyDiff('general')).length || Object.keys(companyDiff('ccb')).length;
-    saveStatus(edited ? '已载入这台浏览器里保存的修改。' : '和内置底稿一致。点一张卡片展开。');
+    saveStatus(edited || draft.elements ? '已载入这台浏览器里保存的修改。' : '和内置底稿一致。点一张卡片展开。');
     renderCompany('general');
     renderCompany('ccb');
     renderManagers();
@@ -338,6 +363,87 @@ async function downloadCompany(variant) {
   saveBlob(await buildPlainDocx(lines), `公司介绍-${title}.docx`, 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
 }
 
+function channel() {
+  return state.variant === 'ccb' ? 'ccb' : 'house';
+}
+
+function currentManual() {
+  return { code: state.manual.code || '', salesCode: state.manual.salesCode || '', channel: channel(), perfMode: 'auto' };
+}
+
+function elementValue(label) {
+  return state.elements?.find(row => row.label === label)?.value || '';
+}
+
+function setElementValue(label, value) {
+  const row = state.elements?.find(item => item.label === label);
+  if (row) row.value = value;
+}
+
+function applyGeneratedRows() {
+  if (!state.core || !state.elements) return;
+  const generated = new Map(composeElements(state.core, currentManual()));
+  if (!state.nameTouched) setElementValue('产品名称', generated.get('产品名称') || '');
+  if (!state.riskTouched) setElementValue('产品风险等级', generated.get('产品风险等级') || '');
+}
+
+function renderElements() {
+  const panel = $('element-panel');
+  panel.hidden = !state.elements;
+  $('contract-name').textContent = state.contractName ? `当前合同：${state.contractName}` : '';
+  if (!state.elements) return;
+  $('product-code').value = state.manual.code || '';
+  $('sales-risk').value = state.manual.salesCode || '';
+  $('risk-channel-note').textContent = state.variant === 'ccb'
+    ? '风险话术目前按建行版：代销机构口径，适合的投资者写成 C 型列表。换上面的公司介绍版本会重写这句；手改过风险格之后不再自动覆盖。'
+    : '风险话术目前按通用版：销售机构口径，适合的投资者写成 C 至 C5。换上面的公司介绍版本会重写这句；手改过风险格之后不再自动覆盖。';
+  $('element-notes').innerHTML = state.elementNotes.map(note => `<p class="warn">${escapeHtml(note)}</p>`).join('');
+  const tall = new Set(['投资范围', '投资策略', '投资比例', '业绩报酬', '产品风险等级', '开放期']);
+  $('element-table').innerHTML = `<table class="element-table"><tbody>${state.elements.map(row => `
+    <tr>
+      <th>${escapeHtml(row.label)}</th>
+      <td><textarea data-element="${escapeHtml(row.label)}" rows="${tall.has(row.label) ? 4 : 2}">${escapeHtml(row.value)}</textarea></td>
+    </tr>`).join('')}</tbody></table>`;
+  renderOnePagers();
+}
+
+function restoreElements(saved) {
+  if (!saved?.rows) return;
+  state.contractName = saved.contractName || '';
+  state.core = saved.core || null;
+  state.elements = saved.rows.map(row => ({ label: row.label, value: row.value || '' }));
+  state.manual = { code: saved.manual?.code || '', salesCode: saved.manual?.salesCode || '' };
+  state.nameTouched = Boolean(saved.nameTouched);
+  state.riskTouched = Boolean(saved.riskTouched);
+  state.elementNotes = Array.isArray(saved.notes) ? saved.notes : [];
+  renderElements();
+}
+
+async function readContract(file) {
+  $('contract-error').hidden = true;
+  if (!/\.docx$/i.test(file.name)) {
+    $('contract-error').hidden = false;
+    $('contract-error').textContent = '合同请使用 docx。';
+    return;
+  }
+  try {
+    const paragraphs = await readDocxParagraphs(new Uint8Array(await file.arrayBuffer()));
+    const core = extractCore(paragraphs.map(paragraph => paragraph.text).join('\n'));
+    state.core = core;
+    state.contractName = file.name;
+    state.manual = { code: '', salesCode: '' };
+    state.nameTouched = false;
+    state.riskTouched = false;
+    state.elementNotes = core.notes || [];
+    state.elements = composeElements(core, currentManual()).map(([label, value]) => ({ label, value }));
+    renderElements();
+    await persistDraft();
+  } catch (error) {
+    $('contract-error').hidden = false;
+    $('contract-error').textContent = error.message || '合同没有读出来。';
+  }
+}
+
 function bindDrop(element, onFiles) {
   element.addEventListener('dragover', event => { event.preventDefault(); element.classList.add('dragging'); });
   element.addEventListener('dragleave', () => element.classList.remove('dragging'));
@@ -360,26 +466,34 @@ function renderOnePagers() {
   `).join('');
   $('run').disabled = state.onePagers.length === 0;
   $('compare-hint').textContent = state.onePagers.length
-    ? `将用${state.variant === 'ccb' ? '建行版' : '通用版'}公司介绍，按 ${state.asOf} 的经理年限核对 ${state.onePagers.length} 份一页通。`
+    ? `${riskHint()}将用${state.variant === 'ccb' ? '建行版' : '通用版'}公司介绍，按 ${state.asOf} 的经理年限核对 ${state.onePagers.length} 份一页通。`
     : '选择文件后开始核对。';
+}
+
+function riskHint() {
+  const risk = elementValue('产品风险等级');
+  if (!risk) return '还没上传合同，这次只核对公司和经理介绍。';
+  return '风险揭示按要素表里的产品风险等级修改。';
 }
 
 function renderResults(results) {
   const changed = results.filter(item => item.changed).length;
   const managers = results.reduce((total, item) => total + item.managers.filter(manager => manager.status === 'updated').length, 0);
+  const risks = results.filter(item => item.riskUpdated).length;
   $('results').innerHTML = `
     <div class="summary">
       <div><span>一页通</span><strong>${results.length}</strong></div>
       <div><span>有修改</span><strong>${changed}</strong></div>
       <div><span>经理简介已改</span><strong>${managers}</strong></div>
-      <div><span>公司介绍版本</span><strong style="font-size:18px">${state.variant === 'ccb' ? '建行版' : '通用版'}</strong></div>
+      <div><span>风险揭示已改</span><strong>${risks}</strong></div>
     </div>
     ${changed > 1 ? '<button id="download-zip" class="secondary" type="button">打包下载全部修订稿</button>' : ''}
     ${results.map((item, index) => `
       <article class="result">
         <h3>${escapeHtml(item.fileName)}</h3>
-        <p>${item.changed ? `写了 ${item.changeCount} 处修订。` : '公司和经理介绍已经和底稿一致，原文件没有改。'}
-          ${item.companyLabels.length ? `公司介绍改动：${escapeHtml(item.companyLabels.join('、'))}。` : ''}</p>
+        <p>${item.changed ? `写了 ${item.changeCount} 处修订。` : '介绍和风险揭示已经一致，原文件没有改。'}
+          ${item.companyLabels.length ? `公司介绍改动：${escapeHtml(item.companyLabels.join('、'))}。` : ''}
+          ${item.riskUpdated ? '风险揭示已按要素表修改。' : ''}</p>
         ${item.managers.map(manager => `<p><span class="badge ${manager.status}">${manager.status === 'updated' ? '已修改' : manager.status === 'inserted' ? '已补入' : '一致'}</span>${escapeHtml(manager.name)} ${manager.calculations.map(calc => `${calc.label} ${calc.years}`).join(' · ')}</p>${manager.status === 'unchanged' ? '' : `<div class="diff"><del>${escapeHtml(manager.before || '（空）')}</del>\n<ins>${escapeHtml(manager.after)}</ins></div>`}`).join('')}
         ${item.warnings.map(warning => `<p class="warn">${escapeHtml(warning)}</p>`).join('')}
         ${item.changed ? `<button class="primary" type="button" data-download="${index}">下载修订稿</button>` : ''}
@@ -413,6 +527,7 @@ async function runReview() {
       results.push(await reviewOnePager({
         bytes, fileName: file.name, companyBytes: state.files[state.variant].bytes, variant: state.variant,
         records: state.records, asOf: state.asOf, companyTextById,
+        elementRisk: elementValue('产品风险等级'),
       }));
     }
     renderResults(results);
@@ -486,6 +601,8 @@ function bind() {
   $('variant').addEventListener('change', () => {
     state.variant = $('variant').value;
     localStorage.setItem('intro-variant', state.variant);
+    applyGeneratedRows();
+    renderElements();
     renderOnePagers();
   });
   $('manager-search').addEventListener('input', renderManagers);
@@ -498,6 +615,8 @@ function bind() {
       state.variant = state.openCard;
       $('variant').value = state.variant;
       localStorage.setItem('intro-variant', state.variant);
+      applyGeneratedRows();
+      renderElements();
       renderOnePagers();
     }
     applyOpenCard();
@@ -550,6 +669,43 @@ function bind() {
   $('download-general').addEventListener('click', () => downloadCompany('general'));
   $('download-ccb').addEventListener('click', () => downloadCompany('ccb'));
   $('onepager-file').addEventListener('change', event => { addOnePagers(event.target.files); event.target.value = ''; });
+  $('contract-file').addEventListener('change', event => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (file) readContract(file);
+  });
+  bindDrop($('contract-drop'), files => { if (files[0]) readContract(files[0]); });
+  $('product-code').addEventListener('input', () => {
+    state.manual.code = $('product-code').value;
+    applyGeneratedRows();
+    const name = $('element-table').querySelector('[data-element="产品名称"]');
+    if (name && !state.nameTouched) name.value = elementValue('产品名称');
+    scheduleSave();
+  });
+  $('sales-risk').addEventListener('change', () => {
+    state.manual.salesCode = $('sales-risk').value;
+    if (state.riskTouched) setElementValue('产品风险等级', applySalesRating(elementValue('产品风险等级'), state.manual.salesCode));
+    else applyGeneratedRows();
+    const risk = $('element-table').querySelector('[data-element="产品风险等级"]');
+    if (risk) risk.value = elementValue('产品风险等级');
+    renderOnePagers();
+    scheduleSave();
+  });
+  $('reset-risk').addEventListener('click', () => {
+    state.riskTouched = false;
+    applyGeneratedRows();
+    renderElements();
+    scheduleSave();
+  });
+  $('element-table').addEventListener('input', event => {
+    const label = event.target?.dataset?.element;
+    if (!label) return;
+    setElementValue(label, event.target.value);
+    if (label === '产品名称') state.nameTouched = true;
+    if (label === '产品风险等级') state.riskTouched = true;
+    renderOnePagers();
+    scheduleSave();
+  });
   $('onepager-list').addEventListener('click', event => {
     const index = event.target?.dataset?.remove;
     if (index == null) return;
