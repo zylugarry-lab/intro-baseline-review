@@ -260,6 +260,20 @@ const withLock = composeElements(
   { channel: 'house' },
 ).find(row => row[0] === '开放期')[1];
 check(withLock.includes('持有满180个自然日'), '合同里的锁定期天数写进开放期');
+const scopeByRange = extractCore([
+  '一、名称：国泰海通君盈荟萃精选大类资产全周期QDII9号1期集合资产管理计划。',
+  '七、投资目标、主要投资方向、投资比例及产品风险等级',
+  '1、投资目标',
+  '本集合计划主要投资于境内外资产。',
+  '2、投资范围',
+  '（1）资产管理计划可根据资金管理的需求，投资于现金、银行存款、货币市场基金；',
+  '（2）资产管理计划可投资于公募证券投资基金。',
+  '特别揭示：本计划可投资于债券回购。',
+  '3、投资比例',
+  '（1）固定收益类资产：占集合计划资产总值的20%～100%（不含）。',
+].join('\n'));
+check(scopeByRange.scope.includes('投资于现金、银行存款') && scopeByRange.scope.includes('公募证券投资基金') && scopeByRange.scope.includes('债券回购'), '标题写成投资范围时也能抽出投资范围');
+check(!scopeByRange.scope.includes('2、投资范围') && !scopeByRange.scope.includes('固定收益类资产'), '投资范围不含标题，也不把投资比例带进来');
 
 const cycleFile = '/Users/luzhiyuan/Desktop/【一页通202604】君享大类资产全周期1号.docx';
 if (existsSync(cycleFile)) {

@@ -9,7 +9,8 @@ export function extractCore(raw) {
   const type = fieldType(basic);
   const manager = fieldManager(text);
   const custodian = fieldCustodian(text);
-  const scope = investmentBlock(basic, /主要投资方向|投资方向[：:]/, /投资比例/);
+  const scope = investmentBlock(basic, /主要投资方向|投资方向[：:]/, /投资比例/)
+    || investmentBlock(basic, /(?:^|\n)\s*(?:[（(]?[0-9一二三四五六七八九十]+[）).、．]\s*)?投资范围[：:]?/, /投资比例/);
   const ratio = compact(investmentBlock(basic, /投资比例/, /产品风险等级|风险评级评价为/));
   const strategy = fieldStrategy(text);
   const duration = fieldDuration(basic);
@@ -21,7 +22,7 @@ export function extractCore(raw) {
   const risk = fieldRisk(basic);
   const notes = [];
   if (!name) notes.push("未识别产品名称，请在要素表中手改。");
-  if (!scope) notes.push("未识别投资范围，请对照合同「主要投资方向」手补。");
+  if (!scope) notes.push("未识别投资范围，请对照合同「投资范围」或「主要投资方向」手补。");
   if (performance.mode === "announce") notes.push("合同只写业绩报酬计提基准、未给具体数字，需在下方手填。");
   if (risk.code && !basic.includes(risk.code) && /中低风险|低风险|中风险|中高风险|高风险/.test(basic)) notes.push("合同未写 R 代号，已按风险用语对应。");
   return { name, type, manager, custodian, scope, ratio, strategy, duration, opening, lock, ...fees, ...amounts, performance, risk, notes };
@@ -160,7 +161,7 @@ function fieldCustodian(text) {
   return found ? found[1].replace(/[。；].*$/, "").trim() : "";
 }
 
-const LABEL_LINE = /^(?:及比例|(?:[（(]?[0-9一二三四五六七八九十]+[）).、．]\s*)?(?:主要)?投资(?:方向|比例)(?:及比例)?(?:（占[^）]*）)?[：:]?|[（(]?[0-9一二三四五六七八九十]+[）).、．]?)$/;
+const LABEL_LINE = /^(?:及比例|(?:[（(]?[0-9一二三四五六七八九十]+[）).、．]\s*)?(?:主要)?投资(?:方向|比例|范围)(?:及比例)?(?:（占[^）]*）)?[：:]?|[（(]?[0-9一二三四五六七八九十]+[）).、．]?)$/;
 
 function investmentBlock(basic, anchorRe, stopRe) {
   const flags = anchorRe.flags.includes("g") ? anchorRe.flags : anchorRe.flags + "g";
