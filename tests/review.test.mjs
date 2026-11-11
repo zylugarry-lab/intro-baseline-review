@@ -1,7 +1,7 @@
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import JSZip from 'jszip';
-import { parseManagerWorkbook } from '../src/excel.js';
+import { buildManagerWorkbook, parseManagerWorkbook, buildElementWorkbook } from '../src/excel.js';
 import { companySections, selectVariant } from '../src/company.js';
 import { refreshBiography, tenureYears } from '../src/years.js';
 import { readDocxParagraphs, reviewOnePager } from '../src/review.js';
@@ -155,6 +155,13 @@ const riskParagraphs = await visibleParagraphs(riskRun.bytes);
 check(riskParagraphs.some(paragraph => paragraph.text.includes('评定为R2（中低风险）') && paragraph.text.includes('该产品销售机构风险评级为R3（中风险）')), '修订稿里的风险揭示已换成要素等级');
 const riskXml = await JSZip.loadAsync(riskRun.bytes).then(zip => zip.file('word/document.xml').async('string'));
 check(riskXml.includes('w:del') && riskXml.includes('w:ins'), '风险修改保留修订标记');
+
+const elementBook = await buildElementWorkbook([['产品名称', '君享测试'], ['产品风险等级', 'R2（中低风险）\n该产品销售机构风险评级为R3（中风险）。']]);
+const elementZip = await JSZip.loadAsync(elementBook);
+const elementSheet = await elementZip.file('xl/worksheets/sheet1.xml').async('string');
+const elementWorkbook = await elementZip.file('xl/workbook.xml').async('string');
+check(elementWorkbook.includes('产品要素表'), '要素表 Excel 的工作表名是产品要素表');
+check(elementSheet.includes('君享测试') && elementSheet.includes('销售机构风险评级为R3'), '要素表 Excel 写入当前格子里的内容');
 
 if (failed) {
   console.error(`\n${failed} checks failed`);

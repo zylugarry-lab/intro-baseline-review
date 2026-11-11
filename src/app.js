@@ -1,6 +1,6 @@
 import { companySections, selectVariant, COMPANY_LABELS } from './company.js';
 import { composeElements, extractCore } from './elements.js';
-import { buildManagerWorkbook, parseManagerWorkbook } from './excel.js';
+import { buildElementWorkbook, buildManagerWorkbook, parseManagerWorkbook } from './excel.js';
 import { downloadName, readDocxParagraphs, reviewOnePager } from './review.js';
 import { applySalesRating } from './risk.js';
 import { readStored, removeStored, writeStored } from './store.js';
@@ -696,6 +696,12 @@ function bind() {
     applyGeneratedRows();
     renderElements();
     scheduleSave();
+  });
+  $('download-elements').addEventListener('click', async () => {
+    if (!state.elements?.length) return;
+    const stem = (state.contractName || '产品要素表').replace(/\.docx$/i, '').replace(/[\\/:*?"<>|\r\n]/g, '').slice(0, 80);
+    const bytes = await buildElementWorkbook(state.elements.map(row => [row.label, row.value]));
+    saveBlob(bytes, `${stem}-产品要素表.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   });
   $('element-table').addEventListener('input', event => {
     const label = event.target?.dataset?.element;
