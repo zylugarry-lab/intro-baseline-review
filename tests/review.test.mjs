@@ -1,15 +1,16 @@
-import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
 import JSZip from 'jszip';
 import { buildManagerWorkbook, parseManagerWorkbook, buildElementWorkbook } from '../src/excel.js';
 import { companySections, selectVariant } from '../src/company.js';
 import { refreshBiography, tenureYears } from '../src/years.js';
-import { readDocxParagraphs, reviewOnePager } from '../src/review.js';
+import { downloadName, readDocxParagraphs, reviewOnePager } from '../src/review.js';
 import { textDiff } from '../src/diff.js';
 import { applyParagraphEdits } from '../src/revise.js';
 import { collectParagraphs, parseXml } from '../src/xml.js';
 import { planRiskEdits, parseRiskStatement } from '../src/risk.js';
-import { composeElements } from '../src/elements.js';
+import { composeElements, extractCore } from '../src/elements.js';
+import { binaryDocText, wordKind } from '../src/word.js';
 
 globalThis.DOMParser = DOMParser;
 globalThis.XMLSerializer = XMLSerializer;
@@ -162,6 +163,35 @@ const elementSheet = await elementZip.file('xl/worksheets/sheet1.xml').async('st
 const elementWorkbook = await elementZip.file('xl/workbook.xml').async('string');
 check(elementWorkbook.includes('产品要素表'), '要素表 Excel 的工作表名是产品要素表');
 check(elementSheet.includes('君享测试') && elementSheet.includes('销售机构风险评级为R3'), '要素表 Excel 写入当前格子里的内容');
+
+const docBytes = Uint8Array.from([0xd0, 0xcf, 0x11, 0xe0, ...Buffer.from('集合计划的基本情况\n集合资产管理计划\n', 'utf16le')]);
+check(wordKind(docBytes) === 'doc', '旧版 DOC 按文件头识别');
+check(binaryDocText(docBytes).includes('基本情况'), '旧版 DOC 能读出正文');
+const docxBytes = read(onePagers[2]);
+check(wordKind(docxBytes) === 'docx', 'DOCX 按文件头识别');
+const renamed = await reviewOnePager({
+  bytes: docxBytes, fileName: '汇享全周期.doc', variant: 'general', records: managers.records, asOf: AS_OF,
+  companyBytes: read('assets/company-introduction-general.docx'),
+});
+check(renamed.changed, '扩展名是 .doc、内容是 docx 的一页通可以核对');
+check(downloadName('汇享全周期.doc') === '汇享全周期（介绍修订）.docx', '旧扩展名下载时改成 docx');
+let binaryRejected = false;
+try {
+  await reviewOnePager({
+    bytes: docBytes, fileName: '旧版.doc', variant: 'general', records: managers.records, asOf: AS_OF,
+    companyBytes: read('assets/company-introduction-general.docx'),
+  });
+} catch (error) {
+  binaryRejected = /旧版 \.doc/.test(error.message);
+}
+check(binaryRejected, '真正的旧版 DOC 一页通会说明写不了修订');
+
+const contractPath = '/Users/luzhiyuan/Desktop/国泰海通/asset management/产品宣传/自动生成要素/国泰海通君盈瑞合增利FOF1号集合资产管理计划管理合同0831.doc';
+if (existsSync(contractPath)) {
+  const contract = binaryDocText(new Uint8Array(readFileSync(contractPath)));
+  const core = extractCore(contract);
+  check(core.name.includes('君盈瑞合增利') && core.risk.code === 'R3', '真实 DOC 合同能抽出名称和风险等级');
+}
 
 if (failed) {
   console.error(`\n${failed} checks failed`);

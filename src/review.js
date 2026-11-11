@@ -3,6 +3,7 @@ import { planManagerEdits } from './managers.js';
 import { planRiskEdits } from './risk.js';
 import { applyParagraphEdits, deleteParagraph, insertParagraphAfter, maxRevisionId } from './revise.js';
 import { collectParagraphs, parseXml, serializeXml, NS } from './xml.js';
+import { wordKind } from './word.js';
 
 const PART = /^word\/(?:document|header\d*|footer\d*|footnotes|endnotes)\.xml$/;
 
@@ -19,7 +20,9 @@ export async function readDocxParagraphs(bytes) {
 }
 
 export async function reviewOnePager({ bytes, fileName, companyBytes, variant, records, asOf, author = '介绍底稿', companyTextById = null, elementRisk = '' }) {
-  if (!/\.docx$/i.test(fileName || '')) throw new Error('一页通请使用 docx 文件。');
+  const kind = wordKind(bytes);
+  if (kind === 'doc') throw new Error('这份一页通是旧版 .doc，原文件里写不了修订。请在 Word 中另存为 .docx 后再上传。');
+  if (kind !== 'docx') throw new Error('一页通请使用 Word 文件（.doc 或 .docx）。');
   const sourceParagraphs = await readDocxParagraphs(companyBytes);
   if (companyTextById) {
     for (const paragraph of sourceParagraphs) {
@@ -112,6 +115,6 @@ async function ensureTracking(zip) {
 }
 
 export function downloadName(fileName) {
-  const stem = String(fileName || '一页通.docx').replace(/\.docx$/i, '');
+  const stem = String(fileName || '一页通.docx').replace(/\.docx?$/i, '');
   return `${stem}（介绍修订）.docx`;
 }

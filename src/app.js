@@ -3,6 +3,7 @@ import { composeElements, extractCore } from './elements.js';
 import { buildElementWorkbook, buildManagerWorkbook, parseManagerWorkbook } from './excel.js';
 import { downloadName, readDocxParagraphs, reviewOnePager } from './review.js';
 import { applySalesRating } from './risk.js';
+import { binaryDocText, wordKind } from './word.js';
 import { readStored, removeStored, writeStored } from './store.js';
 import { refreshBiography, shanghaiToday } from './years.js';
 
@@ -419,16 +420,27 @@ function restoreElements(saved) {
   renderElements();
 }
 
+async function contractPlainText(bytes) {
+  const kind = wordKind(bytes);
+  if (kind === 'docx') {
+    const paragraphs = await readDocxParagraphs(bytes);
+    return paragraphs.map(paragraph => paragraph.text).join('\n');
+  }
+  if (kind === 'doc') return binaryDocText(bytes);
+  throw new Error('请上传 Word 合同（.doc 或 .docx）。');
+}
+
 async function readContract(file) {
   $('contract-error').hidden = true;
-  if (!/\.docx$/i.test(file.name)) {
+  if (!/\.docx?$/i.test(file.name)) {
     $('contract-error').hidden = false;
-    $('contract-error').textContent = '合同请使用 docx。';
+    $('contract-error').textContent = '请上传 Word 合同（.doc 或 .docx）。';
     return;
   }
   try {
-    const paragraphs = await readDocxParagraphs(new Uint8Array(await file.arrayBuffer()));
-    const core = extractCore(paragraphs.map(paragraph => paragraph.text).join('\n'));
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const text = await contractPlainText(bytes);
+    const core = extractCore(text);
     state.core = core;
     state.contractName = file.name;
     state.manual = { code: '', salesCode: '' };
@@ -455,7 +467,11 @@ function bindDrop(element, onFiles) {
 }
 
 function addOnePagers(files) {
-  const accepted = [...files].filter(file => /\.docx$/i.test(file.name));
+  const accepted = [...files].filter(file => /\.docx?$/i.test(file.name));
+  if (files.length && !accepted.length) {
+    $('run-error').hidden = false;
+    $('run-error').textContent = '一页通请使用 Word 文件（.doc 或 .docx）。';
+  }
   state.onePagers.push(...accepted);
   renderOnePagers();
 }
@@ -523,12 +539,19 @@ async function runReview() {
     const companyTextById = Object.fromEntries(paragraphs.map(paragraph => [paragraph.id, paragraph.text]));
     const results = [];
     for (const file of state.onePagers) {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      results.push(await reviewOnePager({
-        bytes, fileName: file.name, companyBytes: state.files[state.variant].bytes, variant: state.variant,
-        records: state.records, asOf: state.asOf, companyTextById,
-        elementRisk: elementValue('产品风险等级'),
-      }));
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        results.push(await reviewOnePager({
+          bytes, fileName: file.name, companyBytes: state.files[state.variant].bytes, variant: state.variant,
+          records: state.records, asOf: state.asOf, companyTextById,
+          elementRisk: elementValue('产品风险等级'),
+        }));
+      } catch (error) {
+        results.push({
+          fileName: file.name, changed: false, bytes: new Uint8Array(), warnings: [error.message || '核对失败。'],
+          managers: [], companyLabels: [], riskUpdated: false, changeCount: 0,
+        });
+      }
     }
     renderResults(results);
     $('compare-hint').textContent = '核对完成。下载的 docx 用 Word 打开即可看到修订。';
@@ -699,7 +722,7 @@ function bind() {
   });
   $('download-elements').addEventListener('click', async () => {
     if (!state.elements?.length) return;
-    const stem = (state.contractName || '产品要素表').replace(/\.docx$/i, '').replace(/[\\/:*?"<>|\r\n]/g, '').slice(0, 80);
+    const stem = (state.contractName || '产品要素表').replace(/\.docx?$/i, '').replace(/[\\/:*?"<>|\r\n]/g, '').slice(0, 80);
     const bytes = await buildElementWorkbook(state.elements.map(row => [row.label, row.value]));
     saveBlob(bytes, `${stem}-产品要素表.xlsx`, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   });
