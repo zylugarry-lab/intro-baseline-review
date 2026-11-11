@@ -10,6 +10,7 @@ import { applyParagraphEdits } from '../src/revise.js';
 import { collectParagraphs, parseXml } from '../src/xml.js';
 import { planRiskEdits, parseRiskStatement } from '../src/risk.js';
 import { composeElements, extractCore } from '../src/elements.js';
+import { planElementEdits } from '../src/element-review.js';
 import { binaryDocText, wordKind } from '../src/word.js';
 
 globalThis.DOMParser = DOMParser;
@@ -192,6 +193,45 @@ if (existsSync(contractPath)) {
   const core = extractCore(contract);
   check(core.name.includes('君盈瑞合增利') && core.risk.code === 'R3', '真实 DOC 合同能抽出名称和风险等级');
 }
+
+function cell(id, text, tableId, rowIndex, cellIndex) {
+  return { id, part: 'word/document.xml', text, tableId, rowIndex, cellIndex, cellKey: `${tableId}:${rowIndex}:${cellIndex}` };
+}
+const elementRows = [
+  cell('a', '产品名称', 'series', 0, 0), cell('b', '成立日', 'series', 0, 1),
+  cell('c', '产品名称', 'facts', 0, 0), cell('d', '旧产品', 'facts', 0, 1),
+  cell('e', '集合管理人', 'facts', 1, 0), cell('f', '上海国泰海通证券资产管理有限公司', 'facts', 1, 1),
+  cell('g', '投资范围', 'facts', 2, 0), cell('h', '范围前半', 'facts', 2, 1), cell('i', '范围后半', 'facts', 2, 1),
+  cell('j', '产品类型', 'facts', 3, 0), cell('k', '固定收益类集合资产管理计划', 'facts', 3, 1),
+  cell('l', '参与 / 退出费率', 'facts', 4, 0), cell('m', '0%', 'facts', 4, 1),
+];
+const elementPlan = planElementEdits(elementRows, [
+  { label: '产品名称', value: '新产品（产品代码：S1）' },
+  { label: '管理人', value: '上海国泰海通证券资产管理有限公司' },
+  { label: '投资范围', value: '新的投资范围' },
+  { label: '产品类型', value: '固定收益类集合资产管理计划' },
+  { label: '参与/退出费率', value: '0%' },
+  { label: '投资策略', value: '合同里的策略' },
+]);
+check(elementPlan.labels.join('、') === '产品名称、投资范围', '只改产品要素表里对不上的格子');
+check(elementPlan.edits.some(edit => edit.before === '旧产品' && edit.after.includes('S1')), '产品名称写成要素表的文字');
+check(elementPlan.edits.some(edit => edit.deleteParagraphId === 'i'), '同一格里多出来的段落删掉');
+check(elementPlan.warnings.some(warning => warning.includes('投资策略')), '一页通没有的要素行会提示');
+
+const factRun = await reviewOnePager({
+  bytes: read(onePagers[0]), fileName: onePagers[0], variant: 'general', records: managers.records, asOf: AS_OF,
+  companyBytes: read('assets/company-introduction-general.docx'),
+  elements: [
+    { label: '产品名称', value: '国泰海通君盈瑞合增利FOF1号集合资产管理计划（产品代码：S12345）' },
+    { label: '管理人', value: '上海国泰海通证券资产管理有限公司' },
+    { label: '托管人', value: '招商银行股份有限公司南京分行' },
+    { label: '产品类型', value: '固定收益类集合资产管理计划' },
+    { label: '存续期', value: '自成立之日起10年（可展期）' },
+  ],
+});
+check(factRun.elementLabels.includes('产品名称') && !factRun.elementLabels.includes('管理人') && !factRun.elementLabels.includes('存续期'), '真实一页通只改不一致的产品要素');
+const factParagraphs = await visibleParagraphs(factRun.bytes);
+check(factParagraphs.some(paragraph => paragraph.text.includes('产品代码：S12345')), '修订后的产品要素表写入了要素表里的产品名称');
 
 if (failed) {
   console.error(`\n${failed} checks failed`);

@@ -489,26 +489,27 @@ function renderOnePagers() {
 function riskHint() {
   const risk = elementValue('产品风险等级');
   if (!risk) return '还没上传合同，这次只核对公司和经理介绍。';
-  return '风险揭示按要素表里的产品风险等级修改。';
+  return '产品要素和底部风险揭示都会按要素表修改。';
 }
 
 function renderResults(results) {
   const changed = results.filter(item => item.changed).length;
   const managers = results.reduce((total, item) => total + item.managers.filter(manager => manager.status === 'updated').length, 0);
-  const risks = results.filter(item => item.riskUpdated).length;
+  const elementsChanged = results.filter(item => item.elementLabels?.length).length;
   $('results').innerHTML = `
     <div class="summary">
       <div><span>一页通</span><strong>${results.length}</strong></div>
       <div><span>有修改</span><strong>${changed}</strong></div>
       <div><span>经理简介已改</span><strong>${managers}</strong></div>
-      <div><span>风险揭示已改</span><strong>${risks}</strong></div>
+      <div><span>产品要素已改</span><strong>${elementsChanged}</strong></div>
     </div>
     ${changed > 1 ? '<button id="download-zip" class="secondary" type="button">打包下载全部修订稿</button>' : ''}
     ${results.map((item, index) => `
       <article class="result">
         <h3>${escapeHtml(item.fileName)}</h3>
-        <p>${item.changed ? `写了 ${item.changeCount} 处修订。` : '介绍和风险揭示已经一致，原文件没有改。'}
+        <p>${item.changed ? `写了 ${item.changeCount} 处修订。` : '介绍、产品要素和风险揭示已经一致，原文件没有改。'}
           ${item.companyLabels.length ? `公司介绍改动：${escapeHtml(item.companyLabels.join('、'))}。` : ''}
+          ${item.elementLabels?.length ? `产品要素改动：${escapeHtml(item.elementLabels.join('、'))}。` : ''}
           ${item.riskUpdated ? '风险揭示已按要素表修改。' : ''}</p>
         ${item.managers.map(manager => `<p><span class="badge ${manager.status}">${manager.status === 'updated' ? '已修改' : manager.status === 'inserted' ? '已补入' : '一致'}</span>${escapeHtml(manager.name)} ${manager.calculations.map(calc => `${calc.label} ${calc.years}`).join(' · ')}</p>${manager.status === 'unchanged' ? '' : `<div class="diff"><del>${escapeHtml(manager.before || '（空）')}</del>\n<ins>${escapeHtml(manager.after)}</ins></div>`}`).join('')}
         ${item.warnings.map(warning => `<p class="warn">${escapeHtml(warning)}</p>`).join('')}
@@ -545,11 +546,12 @@ async function runReview() {
           bytes, fileName: file.name, companyBytes: state.files[state.variant].bytes, variant: state.variant,
           records: state.records, asOf: state.asOf, companyTextById,
           elementRisk: elementValue('产品风险等级'),
+          elements: state.elements,
         }));
       } catch (error) {
         results.push({
           fileName: file.name, changed: false, bytes: new Uint8Array(), warnings: [error.message || '核对失败。'],
-          managers: [], companyLabels: [], riskUpdated: false, changeCount: 0,
+          managers: [], companyLabels: [], elementLabels: [], riskUpdated: false, changeCount: 0,
         });
       }
     }

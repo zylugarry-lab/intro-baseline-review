@@ -35,7 +35,7 @@ export function parseRiskStatement(text) {
   };
 }
 
-export function planRiskEdits(paragraphs, riskText) {
+export function planRiskEdits(paragraphs, riskText, skipIds = null) {
   const canonical = String(riskText || '').trim();
   if (!canonical) return { edits: [], warnings: [] };
   const risk = parseRiskStatement(canonical);
@@ -45,8 +45,13 @@ export function planRiskEdits(paragraphs, riskText) {
   const rows = paragraphs.filter(paragraph => paragraph.part === 'word/document.xml');
   const edits = [];
   let seen = false;
+  let skipped = false;
   for (let index = 0; index < rows.length; index += 1) {
     const paragraph = rows[index];
+    if (skipIds?.has(paragraph.id)) {
+      skipped = true;
+      continue;
+    }
     const trimmed = paragraph.text.trim();
     if (!isRiskStatement(trimmed)) continue;
     seen = true;
@@ -55,7 +60,7 @@ export function planRiskEdits(paragraphs, riskText) {
     pushReplacement(edits, paragraph, rewriteRisk(trimmed, risk, { includeSales: !tail || salesInMain }));
     if (tail && !salesInMain) pushReplacement(edits, tail, rewriteTail(tail.text.trim(), risk));
   }
-  const warnings = seen ? [] : ['这份一页通里没有找到风险等级表述，底部风险揭示没有改。'];
+  const warnings = seen || skipped ? [] : ['这份一页通里没有找到风险等级表述，底部风险揭示没有改。'];
   return { edits, warnings };
 }
 

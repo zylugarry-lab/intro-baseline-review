@@ -1,4 +1,5 @@
 import { planCompanyEdits } from './company.js';
+import { planElementEdits } from './element-review.js';
 import { planManagerEdits } from './managers.js';
 import { planRiskEdits } from './risk.js';
 import { applyParagraphEdits, deleteParagraph, insertParagraphAfter, maxRevisionId } from './revise.js';
@@ -19,7 +20,7 @@ export async function readDocxParagraphs(bytes) {
   return collectParagraphs(doc, 'word/document.xml');
 }
 
-export async function reviewOnePager({ bytes, fileName, companyBytes, variant, records, asOf, author = '介绍底稿', companyTextById = null, elementRisk = '' }) {
+export async function reviewOnePager({ bytes, fileName, companyBytes, variant, records, asOf, author = '介绍底稿', companyTextById = null, elementRisk = '', elements = null }) {
   const kind = wordKind(bytes);
   if (kind === 'doc') throw new Error('这份一页通是旧版 .doc，原文件里写不了修订。请在 Word 中另存为 .docx 后再上传。');
   if (kind !== 'docx') throw new Error('一页通请使用 Word 文件（.doc 或 .docx）。');
@@ -41,9 +42,15 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
   }
   const company = planCompanyEdits(sourceParagraphs, paragraphs, variant);
   const managers = planManagerEdits(paragraphs, records, asOf);
-  const risk = planRiskEdits(paragraphs, elementRisk);
-  const edits = [...company.edits, ...managers.edits, ...risk.edits];
-  const warnings = [...company.warnings, ...managers.warnings, ...risk.warnings];
+  const elementPlan = planElementEdits(paragraphs, elements);
+  const skipRisk = new Set();
+  for (const edit of elementPlan.edits) {
+    if (edit.paragraphId) skipRisk.add(edit.paragraphId);
+    if (edit.deleteParagraphId) skipRisk.add(edit.deleteParagraphId);
+  }
+  const risk = planRiskEdits(paragraphs, elementRisk, skipRisk);
+  const edits = [...company.edits, ...managers.edits, ...elementPlan.edits, ...risk.edits];
+  const warnings = [...company.warnings, ...managers.warnings, ...elementPlan.warnings, ...risk.warnings];
   const byParagraph = new Map();
   const blocked = new Set();
   for (const edit of edits) {
@@ -62,7 +69,7 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
   const insertions = edits.filter(edit => edit.insertAfterId && !blocked.has(edit));
   const changed = byParagraph.size + deletions.length + insertions.length > 0;
   if (!changed) {
-    return { fileName, changed: false, bytes, warnings, managers: managers.reviews, companyLabels: [], riskUpdated: false, changeCount: 0 };
+    return { fileName, changed: false, bytes, warnings, managers: managers.reviews, companyLabels: [], elementLabels: [], riskUpdated: false, changeCount: 0 };
   }
   let revision = maxRevisionId([...docs.values()]);
   const meta = {
@@ -91,6 +98,7 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
   await ensureTracking(zip);
   const output = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
   const companyLabels = [...new Set(edits.filter(edit => edit.source === 'company' && !blocked.has(edit)).map(edit => edit.label))];
+  const elementLabels = [...new Set(edits.filter(edit => edit.source === 'element' && !blocked.has(edit)).map(edit => edit.label))];
   const riskUpdated = [...byParagraph.values()].some(list => list.some(edit => edit.source === 'risk'));
   return {
     fileName,
@@ -99,6 +107,7 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
     warnings,
     managers: managers.reviews,
     companyLabels,
+    elementLabels,
     riskUpdated,
     changeCount: [...byParagraph.values()].reduce((total, list) => total + list.length, 0) + deletions.length + insertions.length,
   };
