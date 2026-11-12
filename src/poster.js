@@ -80,6 +80,90 @@ export function posterCopy({ elements, channel = 'house', code = '', date = '', 
   return { name, riskLine, suitability: fit, rows, disclaimer };
 }
 
+const PT = 12700;
+const CM = 360000;
+
+function textUnits(text) {
+  let units = 0;
+  for (const char of String(text || '')) units += char.charCodeAt(0) <= 255 ? 0.55 : 1;
+  return units;
+}
+
+function lineCount(text, width, sz) {
+  const value = String(text || '').trim();
+  if (!value || width <= 0) return 0;
+  const perLine = Math.max(4, (width * 0.9) / ((sz / 100) * PT));
+  return value.split('\n').reduce((total, part) => total + Math.max(1, Math.ceil(textUnits(part) / perLine)), 0);
+}
+
+function textHeight(text, width, sz) {
+  return lineCount(text, width, sz) * (sz / 100) * PT * 1.2;
+}
+
+function rowsHeight(rows, width, sz) {
+  const gap = 5 * PT;
+  return rows.reduce((total, row) => total + textHeight(row.label, width, sz) + textHeight(row.value, width, sz) + gap, 0);
+}
+
+function titleBlockHeight(name, riskLine, width, nameSz, subSz) {
+  const main = String(name || '').replace(/集合资产管理计划/g, '').trim();
+  let height = textHeight(main || name, width, nameSz);
+  if (String(name || '').includes('集合资产管理计划')) height += (subSz / 100) * PT * 1.2;
+  if (riskLine) height += textHeight(riskLine, width, subSz);
+  return height + 4 * PT;
+}
+
+export function posterLayout(copy, frame) {
+  const margin = 0.28 * CM;
+  const gap = 0.32 * CM;
+  const pad = 0.4 * CM;
+  let disclaimerSz = 800;
+  let disclaimerH = textHeight(copy.disclaimer, frame.disclaimerWidth, disclaimerSz) + 0.22 * CM;
+  if (disclaimerH > frame.slideH * 0.18) {
+    disclaimerSz = 700;
+    disclaimerH = textHeight(copy.disclaimer, frame.disclaimerWidth, disclaimerSz) + 0.22 * CM;
+  }
+  const disclaimerY = frame.slideH - margin - disclaimerH;
+  const sizes = [1600, 1500, 1400, 1300, 1200, 1100, 1000, 900, 800];
+  const minTop = frame.titleTop + 3.6 * CM;
+  const pick = top => {
+    let chosen = sizes[sizes.length - 1];
+    let height = rowsHeight(copy.rows, frame.bodyWidth, chosen);
+    for (const sz of sizes) {
+      const next = rowsHeight(copy.rows, frame.bodyWidth, sz);
+      chosen = sz;
+      height = next;
+      if (top + next + pad <= disclaimerY - gap) break;
+    }
+    return { sz: chosen, h: height };
+  };
+  let bodyTop = frame.bodyTop;
+  let body = pick(bodyTop);
+  if (bodyTop + body.h + pad > disclaimerY - gap) {
+    bodyTop = Math.max(minTop, disclaimerY - gap - pad - body.h);
+    body = pick(bodyTop);
+  }
+  const room = Math.max(disclaimerY - gap - bodyTop, 0.8 * CM);
+  const bodyH = Math.min(body.h + pad, room);
+  const titleRoom = Math.max(bodyTop - gap - frame.titleTop, 2.2 * CM);
+  let nameSz = 1800;
+  let subSz = 1600;
+  for (const sz of [3200, 2800, 2600, 2400, 2200, 2000, 1800]) {
+    const nextSub = Math.max(1600, sz - 400);
+    if (titleBlockHeight(copy.name, copy.riskLine, frame.titleWidth, sz, nextSub) <= titleRoom) {
+      nameSz = sz;
+      subSz = nextSub;
+      break;
+    }
+  }
+  const titleH = Math.min(titleBlockHeight(copy.name, copy.riskLine, frame.titleWidth, nameSz, subSz) + 0.12 * CM, titleRoom);
+  return {
+    title: { nameSz, subSz, y: frame.titleTop, h: titleH },
+    body: { sz: body.sz, y: bodyTop, h: bodyH },
+    disclaimer: { sz: disclaimerSz, y: disclaimerY, h: disclaimerH },
+  };
+}
+
 export function posterFileName(productNameValue, asOf) {
   const stamp = String(asOf || '').match(/^(\d{4})-(\d{2})/);
   const short = productName(productNameValue).replace(/集合资产管理计划/g, '').replace(/[/／\\:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -151,65 +235,136 @@ function pairAfter(paragraphs, prefix) {
   return { label: paragraphs[index], value };
 }
 
-function prependPair(body, labelSample, valueSample, spacerSample, label, value) {
-  const labelParagraph = labelSample.cloneNode(true);
-  const valueParagraph = valueSample.cloneNode(true);
-  const spacer = spacerSample.cloneNode(true);
-  writeParagraph(labelParagraph, [{ text: label }]);
-  writeParagraph(valueParagraph, [{ text: value }]);
-  const first = children(body, A, 'p')[0];
-  body.insertBefore(labelParagraph, first);
-  body.insertBefore(valueParagraph, first);
-  body.insertBefore(spacer, first);
-}
-
-function writeTitle(shape, name, riskLine) {
+function writeTitle(shape, name, riskLine, nameSz, subSz) {
   const paragraph = children(shape.getElementsByTagNameNS(P, 'txBody')[0], A, 'p')[0];
   const main = name.replace(/集合资产管理计划/g, '').trim();
-  const pieces = [{ text: main || name, sz: '3200', bold: true }];
-  if (name.includes('集合资产管理计划')) pieces.push({ text: '集合资产管理计划', sz: '2800', bold: true, breakBefore: true });
-  if (riskLine) pieces.push({ text: riskLine, sz: '2800', bold: true, breakBefore: true });
+  const pieces = [{ text: main || name, sz: String(nameSz), bold: true }];
+  if (name.includes('集合资产管理计划')) pieces.push({ text: '集合资产管理计划', sz: String(subSz), bold: true, breakBefore: true });
+  if (riskLine) pieces.push({ text: riskLine, sz: String(subSz), bold: true, breakBefore: true });
   writeParagraph(paragraph, pieces);
+  tuneParagraph(paragraph, 0);
+}
+
+function shapeBox(shape) {
+  const spPr = childList(shape).find(node => node.localName === 'spPr');
+  const form = children(spPr, A, 'xfrm')[0];
+  const off = children(form, A, 'off')[0];
+  const ext = children(form, A, 'ext')[0];
+  return {
+    x: Number(off.getAttribute('x')),
+    y: Number(off.getAttribute('y')),
+    w: Number(ext.getAttribute('cx')),
+    h: Number(ext.getAttribute('cy')),
+    off,
+    ext,
+  };
+}
+
+function usableWidth(shape) {
+  const box = shapeBox(shape);
+  const bodyPr = shape.getElementsByTagNameNS(A, 'bodyPr')[0];
+  const left = Number(bodyPr?.getAttribute('lIns') || 91440);
+  const right = Number(bodyPr?.getAttribute('rIns') || 91440);
+  return Math.max(box.w - left - right, box.w * 0.8);
+}
+
+function placeShape(shape, y, height) {
+  const box = shapeBox(shape);
+  box.off.setAttribute('y', String(Math.round(y)));
+  box.ext.setAttribute('cy', String(Math.max(Math.round(height), 100000)));
+}
+
+function stopAutofit(shape) {
+  const bodyPr = shape.getElementsByTagNameNS(A, 'bodyPr')[0];
+  if (!bodyPr) return;
+  for (const child of childList(bodyPr)) {
+    if (child.localName === 'spAutoFit' || child.localName === 'normAutofit' || child.localName === 'noAutofit') bodyPr.removeChild(child);
+  }
+  bodyPr.appendChild(bodyPr.ownerDocument.createElementNS(A, 'a:noAutofit'));
+  bodyPr.setAttribute('anchor', 't');
+}
+
+function tuneParagraph(paragraph, afterPts) {
+  let props = children(paragraph, A, 'pPr')[0];
+  if (!props) {
+    props = paragraph.ownerDocument.createElementNS(A, 'a:pPr');
+    paragraph.insertBefore(props, paragraph.firstChild);
+  }
+  for (const child of childList(props)) {
+    if (child.localName === 'lnSpc' || child.localName === 'spcAft' || child.localName === 'spcBef') props.removeChild(child);
+  }
+  const spacing = paragraph.ownerDocument.createElementNS(A, 'a:lnSpc');
+  const percent = paragraph.ownerDocument.createElementNS(A, 'a:spcPct');
+  percent.setAttribute('val', '120000');
+  spacing.appendChild(percent);
+  props.appendChild(spacing);
+  if (afterPts) {
+    const after = paragraph.ownerDocument.createElementNS(A, 'a:spcAft');
+    const points = paragraph.ownerDocument.createElementNS(A, 'a:spcPts');
+    points.setAttribute('val', String(afterPts));
+    after.appendChild(points);
+    props.appendChild(after);
+  }
+}
+
+function appendStyled(body, sample, pieces, afterPts) {
+  const paragraph = sample.cloneNode(true);
+  tuneParagraph(paragraph, afterPts);
+  writeParagraph(paragraph, pieces);
+  body.appendChild(paragraph);
+}
+
+function refillBody(shape, copy, sz) {
+  const { body, paragraphs } = bodyParagraphs(shape);
+  const found = pairAfter(paragraphs, '起购金额');
+  const labelSample = found?.label?.cloneNode(true);
+  const valueSample = found?.value?.cloneNode(true) || labelSample;
+  const valueRun = valueSample ? childList(valueSample).find(node => node.localName === 'r') : null;
+  for (const paragraph of children(body, A, 'p')) body.removeChild(paragraph);
+  const size = String(sz);
+  for (const row of copy.rows) {
+    if (row.label.startsWith('风险等级')) {
+      appendStyled(body, labelSample, [
+        { text: '风险等级：', bold: true, sz: size },
+        { text: row.label.replace(/^风险等级：/, ''), sample: valueRun, bold: false, sz: size },
+      ], 400);
+    } else if (!row.label) {
+      appendStyled(body, valueSample, [{ text: row.value, sz: size }], 200);
+    } else {
+      appendStyled(body, labelSample, [{ text: row.label, sz: size, bold: true }], 0);
+      if (row.value) appendStyled(body, valueSample, [{ text: row.value, sz: size }], 500);
+    }
+  }
 }
 
 export async function buildPoster(templateBytes, spec) {
   const copy = posterCopy(spec);
   const zip = await globalThis.JSZip.loadAsync(templateBytes);
   const doc = parseXml(await zip.file('ppt/slides/slide1.xml').async('string'));
-  writeTitle(shapeByName(doc, '标题 1'), copy.name, copy.riskLine);
-  const disclaimer = bodyParagraphs(shapeByName(doc, '副标题 2')).paragraphs.find(paragraph => textOf(paragraph).trim())
-    || bodyParagraphs(shapeByName(doc, '副标题 2')).paragraphs[0];
-  writeParagraph(disclaimer, [{ text: copy.disclaimer }]);
-  const { body, paragraphs } = bodyParagraphs(shapeByName(doc, '文本框 20'));
-  const slots = [
-    ['起购金额', copy.rows.find(row => row.label === '起购金额：')],
-    ['业绩报酬', copy.rows.find(row => row.label === '业绩报酬计提：')],
-    ['开放期', copy.rows.find(row => row.label === '开放期：')],
-    ['产品费率', copy.rows.find(row => row.label === '产品费率：')],
-    ['风险等级', { label: copy.riskLine, value: '' }],
-    ['适合合格', { label: '', value: copy.suitability }],
-  ];
-  for (const [prefix, row] of slots) {
-    const found = pairAfter(paragraphs, prefix);
-    if (!found || !row) continue;
-    if (prefix === '风险等级') {
-      const runs = childList(found.label).filter(node => node.localName === 'r');
-      writeParagraph(found.label, [
-        { text: '风险等级：', sample: runs[0], bold: true },
-        { text: copy.riskLine.replace(/^风险等级：/, ''), sample: runs[1] || runs[0], bold: false },
-      ]);
-    } else if (prefix === '适合合格') {
-      writeParagraph(found.label, [{ text: row.value }]);
-    } else {
-      writeParagraph(found.label, [{ text: row.label }]);
-      if (found.value) writeParagraph(found.value, [{ text: row.value }]);
-    }
-  }
-  const labelSample = pairAfter(paragraphs, '起购金额')?.label;
-  const valueSample = pairAfter(paragraphs, '起购金额')?.value;
-  const spacerSample = paragraphs.find(paragraph => !textOf(paragraph).trim()) || labelSample;
-  const extras = copy.rows.filter(row => row.label === '产品代码：' || row.label === '开放/销售日期：');
-  for (const row of [...extras].reverse()) prependPair(body, labelSample, valueSample, spacerSample, row.label, row.value);
+  const pres = parseXml(await zip.file('ppt/presentation.xml').async('string'));
+  const slideH = Number(pres.getElementsByTagNameNS(P, 'sldSz')[0].getAttribute('cy'));
+  const title = shapeByName(doc, '标题 1');
+  const bodyShape = shapeByName(doc, '文本框 20');
+  const footer = shapeByName(doc, '副标题 2');
+  const layout = posterLayout(copy, {
+    slideH,
+    bodyWidth: usableWidth(bodyShape),
+    bodyTop: shapeBox(bodyShape).y,
+    titleWidth: usableWidth(title),
+    titleTop: shapeBox(title).y,
+    disclaimerWidth: usableWidth(footer),
+  });
+  writeTitle(title, copy.name, copy.riskLine, layout.title.nameSz, layout.title.subSz);
+  placeShape(title, layout.title.y, layout.title.h);
+  stopAutofit(title);
+  const disclaimer = bodyParagraphs(footer).paragraphs.find(paragraph => textOf(paragraph).trim()) || bodyParagraphs(footer).paragraphs[0];
+  writeParagraph(disclaimer, [{ text: copy.disclaimer, sz: String(layout.disclaimer.sz) }]);
+  tuneParagraph(disclaimer, 0);
+  placeShape(footer, layout.disclaimer.y, layout.disclaimer.h);
+  stopAutofit(footer);
+  refillBody(bodyShape, copy, layout.body.sz);
+  placeShape(bodyShape, layout.body.y, layout.body.h);
+  stopAutofit(bodyShape);
   zip.file('ppt/slides/slide1.xml', serializeXml(doc));
   return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
 }

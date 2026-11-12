@@ -13,7 +13,7 @@ import { composeElements, contractManagerNames, extractCore } from '../src/eleme
 import { planCoverNameEdits, planElementEdits } from '../src/element-review.js';
 import { planManagerEdits } from '../src/managers.js';
 import { planLockEdits } from '../src/lock.js';
-import { buildPoster, posterCopy, posterFileName } from '../src/poster.js';
+import { buildPoster, posterCopy, posterFileName, posterLayout } from '../src/poster.js';
 import { binaryDocText, wordKind } from '../src/word.js';
 
 globalThis.DOMParser = DOMParser;
@@ -356,6 +356,22 @@ check(posterXml.includes('福星多元稳健19号') && !posterXml.includes('星�
 check(posterXml.includes('风险等级：') && posterXml.includes('R3（中风险）') && posterXml.includes('C3-C5'), '海报写入风险等级大字和简写');
 check(posterXml.includes('953794') && posterXml.includes('9月28日 正式开放') && posterXml.includes('管理费率：0.6%/年'), '海报写入代码、日期和费率');
 check(!posterXml.includes('40万元'), '海报不再保留模板里的起购金额');
+const frame = { slideH: 11878945, bodyWidth: 6000000, bodyTop: 7060000, titleWidth: 4200000, titleTop: 4540000, disclaimerWidth: 6400000 };
+const shortLayout = posterLayout(poster, frame);
+const longCopy = posterCopy({
+  elements: posterRows.map(row => row.label === '业绩报酬' ? { ...row, value: '当年化收益率超过计提基准时提取业绩报酬。'.repeat(30) } : row),
+  channel: 'house',
+});
+const longName = posterCopy({
+  elements: posterRows.map(row => row.label === '产品名称' ? { ...row, value: '国泰海通君盈荟萃精选大类资产全周期QDII9号1期集合资产管理计划' } : row),
+  channel: 'house',
+});
+const longLayout = posterLayout(longCopy, frame);
+const nameLayout = posterLayout(longName, frame);
+check(longLayout.body.sz < shortLayout.body.sz, '正文变长时字号缩小');
+check(longLayout.body.y + longLayout.body.h <= longLayout.disclaimer.y, '正文不会压住底部风险揭示');
+check(longLayout.disclaimer.y + longLayout.disclaimer.h <= frame.slideH, '风险揭示落在页面里面');
+check(nameLayout.title.nameSz < shortLayout.title.nameSz, '产品名称变长时标题缩小');
 
 const cycleFile = '/Users/luzhiyuan/Desktop/【一页通202604】君享大类资产全周期1号.docx';
 if (existsSync(cycleFile)) {
