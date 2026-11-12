@@ -585,12 +585,12 @@ function renderOnePagers() {
 function riskHint() {
   const risk = elementValue('产品风险等级');
   if (!risk) return '还没上传合同，这次只核对公司和经理介绍。';
-  return '产品要素和底部风险揭示都会按要素表修改。';
+  return '产品要素、投资经理名单和底部风险揭示都会按合同修改。';
 }
 
 function renderResults(results) {
   const changed = results.filter(item => item.changed).length;
-  const managers = results.reduce((total, item) => total + item.managers.filter(manager => manager.status === 'updated').length, 0);
+  const managers = results.reduce((total, item) => total + item.managers.filter(manager => manager.status !== 'unchanged').length, 0);
   const elementsChanged = results.filter(item => item.elementLabels?.length).length;
   $('results').innerHTML = `
     <div class="summary">
@@ -608,7 +608,7 @@ function renderResults(results) {
           ${item.elementLabels?.length ? `产品要素改动：${escapeHtml(item.elementLabels.join('、'))}。` : ''}
           ${item.riskUpdated ? '风险揭示已按要素表修改。' : ''}
           ${item.lockUpdated ? '锁定期天数已按要素表修改。' : ''}</p>
-        ${item.managers.map(manager => `<p><span class="badge ${manager.status}">${manager.status === 'updated' ? '已修改' : manager.status === 'inserted' ? '已补入' : '一致'}</span>${escapeHtml(manager.name)} ${manager.calculations.map(calc => `${calc.label} ${calc.years}`).join(' · ')}</p>${manager.status === 'unchanged' ? '' : `<div class="diff"><del>${escapeHtml(manager.before || '（空）')}</del>\n<ins>${escapeHtml(manager.after)}</ins></div>`}`).join('')}
+        ${item.managers.map(manager => `<p><span class="badge ${manager.status}">${manager.status === 'updated' ? '已修改' : manager.status === 'inserted' ? '已补入' : manager.status === 'removed' ? '已删除' : '一致'}</span>${escapeHtml(manager.name)} ${(manager.calculations || []).map(calc => `${calc.label} ${calc.years}`).join(' · ')}</p>${manager.status === 'unchanged' ? '' : `<div class="diff"><del>${escapeHtml(manager.before || '（空）')}</del>\n<ins>${escapeHtml(manager.after || '（已删除）')}</ins></div>`}`).join('')}
         ${item.warnings.map(warning => `<p class="warn">${escapeHtml(warning)}</p>`).join('')}
         ${item.changed ? `<button class="primary" type="button" data-download="${index}">下载修订稿</button>` : ''}
       </article>

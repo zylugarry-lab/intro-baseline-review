@@ -9,6 +9,14 @@ import { wordKind } from './word.js';
 
 const PART = /^word\/(?:document|header\d*|footer\d*|footnotes|endnotes)\.xml$/;
 
+function managerRoster(elements) {
+  if (!elements) return null;
+  const row = elements.find(item => item.label === '投资经理');
+  if (!row) return null;
+  const names = String(row.value || '').split(/[、,，;；\n\s]+/).map(item => item.trim()).filter(name => /^[\u4e00-\u9fff]{2,4}$/.test(name));
+  return names.length ? names : null;
+}
+
 function rangesOverlap(a, b) {
   return a.start < b.start + b.before.length && b.start < a.start + a.before.length;
 }
@@ -42,7 +50,7 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
     paragraphs.push(...collectParagraphs(doc, part));
   }
   const company = planCompanyEdits(sourceParagraphs, paragraphs, variant);
-  const managers = planManagerEdits(paragraphs, records, asOf);
+  const managers = planManagerEdits(paragraphs, records, asOf, managerRoster(elements));
   const elementPlan = planElementEdits(paragraphs, elements);
   const cover = planCoverNameEdits(paragraphs, (elements || []).find(row => row.label === '产品名称')?.value);
   const skipRisk = new Set();

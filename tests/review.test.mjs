@@ -9,8 +9,9 @@ import { textDiff } from '../src/diff.js';
 import { applyParagraphEdits } from '../src/revise.js';
 import { collectParagraphs, parseXml } from '../src/xml.js';
 import { planRiskEdits, parseRiskStatement } from '../src/risk.js';
-import { composeElements, extractCore } from '../src/elements.js';
+import { composeElements, contractManagerNames, extractCore } from '../src/elements.js';
 import { planCoverNameEdits, planElementEdits } from '../src/element-review.js';
+import { planManagerEdits } from '../src/managers.js';
 import { planLockEdits } from '../src/lock.js';
 import { binaryDocText, wordKind } from '../src/word.js';
 
@@ -315,6 +316,20 @@ const tierRate = tierFees.find(row => row[0] === '参与/退出费率')[1];
 check(tierRate.includes('认购费率：参与金额<1000万，0.2%；参与金额≥1000万，0%。') && tierRate.includes('参与费率：参与金额<1000万，0.2%；参与金额≥1000万，0%。') && tierRate.includes('退出费率0%'), '认购费和参与费的分档写进参与/退出费率');
 check(tierFees.find(row => row[0] === '产品费率')[1] === '固定管理费率：1%/年；托管费率：0.05%/年', '分档参与费不改管理费和托管费');
 check(composeElements(extractCore('1、认购费率：0%\n2、存续期参与费率：0%\n3、退出费率：0%\n'), { channel: 'house' }).find(row => row[0] === '参与/退出费率')[1] === '0%', '没有分档时参与费和退出费都是 0 仍写成 0%');
+const named = contractManagerNames('投资经理的指定\n投资经理：\n王宜峰，8年证券从业经验。\n刘博洋，6年证券从业经验。\n投资经理的变更\n管理人可根据业务需要变更投资经理。');
+check(named.join('、') === '王宜峰、刘博洋', '合同投资经理名单按指定段落提取');
+const rosterParagraphs = [
+  { id: 'h', part: 'word/document.xml', index: 1, text: '投资经理介绍' },
+  { id: 'n1', part: 'word/document.xml', index: 2, text: '王宜峰：' },
+  { id: 'b1', part: 'word/document.xml', index: 3, text: '旧简介。' },
+  { id: 'n2', part: 'word/document.xml', index: 4, text: '侯少蒙：' },
+  { id: 'b2', part: 'word/document.xml', index: 5, text: '侯少蒙的旧介绍。' },
+  { id: 'end', part: 'word/document.xml', index: 6, text: '风险揭示' },
+];
+const rosterEdits = planManagerEdits(rosterParagraphs, managers.records, AS_OF, ['王宜峰', '赵博阳']);
+check(rosterEdits.edits.some(edit => edit.deleteParagraphId === 'n2') && rosterEdits.edits.some(edit => edit.deleteParagraphId === 'b2'), '合同里没有的投资经理从一页通删除');
+check(rosterEdits.reviews.some(item => item.name === '赵博阳' && item.status === 'inserted'), '合同里有、一页通没有的投资经理按底稿补上');
+check(!rosterEdits.edits.some(edit => edit.deleteParagraphId === 'n1'), '合同里有的投资经理保留');
 
 const cycleFile = '/Users/luzhiyuan/Desktop/【一页通202604】君享大类资产全周期1号.docx';
 if (existsSync(cycleFile)) {

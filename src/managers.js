@@ -75,13 +75,55 @@ function sameCopy(before, after) {
   return norm(before) === norm(after);
 }
 
-export function planManagerEdits(paragraphs, records, asOf) {
+function managerSection(paragraphs) {
+  const body = paragraphs.filter(paragraph => paragraph.part === 'word/document.xml').sort((left, right) => left.index - right.index);
+  const heading = body.find(paragraph => /^(?:投资经理|基金经理)(?:介绍|简介)?$/.test(paragraph.text.trim().replace(/^[\s•·●◆\uF0D8]+/, '')));
+  if (!heading) return null;
+  const section = [];
+  let sawTable = Boolean(heading.tableId);
+  for (const paragraph of body) {
+    if (paragraph.index <= heading.index) continue;
+    if (paragraph.text.trim() && isBoundary(paragraph.text)) break;
+    if (!heading.tableId && paragraph.tableId) sawTable = true;
+    if (!heading.tableId && sawTable && !paragraph.tableId && paragraph.text.trim()) break;
+    if (heading.tableId && paragraph.tableId && paragraph.tableId !== heading.tableId) break;
+    section.push(paragraph);
+  }
+  return { heading, paragraphs: section };
+}
+
+function isNameParagraph(text) {
+  const value = String(text || '').trim().replace(/^[\s•·●◆\uF0D8]+/, '');
+  if (/^[\u4e00-\u9fff]{2,4}[：:]?$/.test(value)) return true;
+  return /^[\u4e00-\u9fff]{2,4}[：:]/.test(value);
+}
+
+function nameOf(text) {
+  return String(text || '').trim().replace(/^[\s•·●◆\uF0D8]+/, '').match(/^([\u4e00-\u9fff]{2,4})/)?.[1] || '';
+}
+
+function managerBlocks(sectionParagraphs) {
+  const blocks = [];
+  let current = null;
+  for (const paragraph of sectionParagraphs) {
+    if (!paragraph.text.trim()) continue;
+    if (isNameParagraph(paragraph.text)) {
+      current = { name: nameOf(paragraph.text), paragraphs: [paragraph] };
+      blocks.push(current);
+    } else if (current) current.paragraphs.push(paragraph);
+  }
+  return blocks;
+}
+
+export function planManagerEdits(paragraphs, records, asOf, contractNames = null) {
+  const roster = Array.isArray(contractNames) && contractNames.length ? [...new Set(contractNames)] : null;
   const prepared = records.map(record => ({ record, ...refreshBiography(record, asOf) })).filter(item => item.record.name && item.text.trim());
   const regions = biographyRegions(paragraphs, prepared.map(item => item.record.name));
   const edits = [];
   const reviews = [];
   const warnings = [];
   for (const region of regions) {
+    if (roster && !roster.includes(region.name)) continue;
     const before = region.entries.map(entry => entry.text).join('\n');
     const candidates = prepared.filter(item => item.record.name === region.name)
       .map(item => ({ ...item, score: similarity(before, item.text) }))
@@ -132,12 +174,66 @@ export function planManagerEdits(paragraphs, records, asOf) {
       }
     }
   }
-  const matched = new Set(reviews.map(item => item.name));
-  const seen = new Set();
-  for (const region of regions) {
-    if (matched.has(region.name) || seen.has(region.name)) continue;
-    seen.add(region.name);
-    warnings.push(`一页通里的“${region.name}”不在经理底稿中，介绍保持原样。`);
+  if (roster) syncRoster(paragraphs, roster, prepared, regions, edits, reviews, warnings);
+  else {
+    const matched = new Set(reviews.map(item => item.name));
+    const seen = new Set();
+    for (const region of regions) {
+      if (matched.has(region.name) || seen.has(region.name)) continue;
+      seen.add(region.name);
+      warnings.push(`一页通里的“${region.name}”不在经理底稿中，介绍保持原样。`);
+    }
   }
   return { edits, reviews, warnings };
+}
+
+function syncRoster(paragraphs, roster, prepared, regions, edits, reviews, warnings) {
+  const section = managerSection(paragraphs);
+  if (!section) {
+    warnings.push('一页通里没有找到投资经理栏目，没有按合同增减经理。');
+    return;
+  }
+  const blocks = managerBlocks(section.paragraphs);
+  const present = new Set([...blocks.map(block => block.name), ...regions.map(region => region.name)]);
+  for (const block of blocks) {
+    if (roster.includes(block.name)) continue;
+    for (const paragraph of block.paragraphs) {
+      edits.push({ deleteParagraphId: paragraph.id, label: `${block.name}简介`, source: 'manager' });
+    }
+    reviews.push({
+      name: block.name,
+      status: 'removed',
+      before: block.paragraphs.map(paragraph => paragraph.text.trim()).filter(Boolean).join('\n'),
+      after: '',
+      calculations: [],
+    });
+    warnings.push(`一页通里的「${block.name}」不在合同投资经理名单中，已删除。`);
+  }
+  let anchor = [...blocks].reverse().find(block => roster.includes(block.name));
+  let afterId = anchor ? anchor.paragraphs[anchor.paragraphs.length - 1].id : section.heading.id;
+  const styleColon = blocks.some(block => /[：:]/.test(block.paragraphs[0].text));
+  for (const name of roster) {
+    if (present.has(name) || regions.some(region => region.name === name)) continue;
+    const chosen = prepared.find(item => item.record.name === name);
+    if (!chosen) {
+      warnings.push(`合同里的「${name}」不在经理底稿中，一页通没有补上简介。`);
+      continue;
+    }
+    const nameLine = styleColon || !blocks.length ? `${name}：` : name;
+    const bio = chosen.text.split('\n').map(line => line.trim()).filter(Boolean).map(line => line.replace(new RegExp(`^${name}[：:，,]\\s*`), '')).filter(Boolean);
+    reviews.push({
+      name,
+      status: 'inserted',
+      before: '',
+      after: chosen.text,
+      calculations: chosen.calculations,
+      sheet: chosen.record.sheet,
+      row: chosen.record.row,
+    });
+    for (const line of [nameLine, ...bio]) {
+      const newId = `new-manager-${edits.length}`;
+      edits.push({ insertAfterId: afterId, newId, text: line, label: `${name}简介`, source: 'manager' });
+      afterId = newId;
+    }
+  }
 }

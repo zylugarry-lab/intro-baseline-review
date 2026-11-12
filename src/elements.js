@@ -8,6 +8,7 @@ export function extractCore(raw) {
   const name = fieldName(basic, text);
   const type = fieldType(basic);
   const manager = fieldManager(text);
+  const managers = contractManagerNames(text);
   const custodian = fieldCustodian(text);
   const scope = compact(investmentBlock(basic, /主要投资方向|投资方向[：:]/, /投资比例/)
     || investmentBlock(basic, /(?:^|\n)\s*(?:[（(]?[0-9一二三四五六七八九十]+[）).、．]\s*)?投资范围[：:]?/, /投资比例/));
@@ -23,9 +24,10 @@ export function extractCore(raw) {
   const notes = [];
   if (!name) notes.push("未识别产品名称，请在要素表中手改。");
   if (!scope) notes.push("未识别投资范围，请对照合同「投资范围」或「主要投资方向」手补。");
+  if (!managers.length) notes.push("未识别合同里的投资经理，一页通的经理名单不会按合同增减。");
   if (performance.mode === "announce") notes.push("合同只写业绩报酬计提基准、未给具体数字，需在下方手填。");
   if (risk.code && !basic.includes(risk.code) && /中低风险|低风险|中风险|中高风险|高风险/.test(basic)) notes.push("合同未写 R 代号，已按风险用语对应。");
-  return { name, type, manager, custodian, scope, ratio, strategy, duration, opening, lock, ...fees, ...amounts, performance, risk, notes };
+  return { name, type, manager, managers, custodian, scope, ratio, strategy, duration, opening, lock, ...fees, ...amounts, performance, risk, notes };
 }
 
 export function composeElements(core, manual) {
@@ -44,6 +46,7 @@ export function composeElements(core, manual) {
   return [
     ["产品名称", name],
     ["管理人", core.manager || ""],
+    ["投资经理", (core.managers || []).join("、")],
     ["托管人", core.custodian || ""],
     ["产品类型", core.type || ""],
     ["投资范围", core.scope || ""],
@@ -146,6 +149,24 @@ function fieldType(basic) {
   if (inline) return inline[1].trim();
   const block = basic.match(/(?:类别|产品类型)\s*\n+\s*([^\n。]{4,40})/);
   return block ? block[1].trim() : "";
+}
+
+export function contractManagerNames(text) {
+  const source = String(text || "");
+  for (const mark of source.matchAll(/投资经理[：:]/g)) {
+    const after = source.slice(mark.index + mark[0].length, mark.index + mark[0].length + 4000);
+    if (/PAGEREF|HYPERLINK|_Toc/.test(after.slice(0, 120))) continue;
+    const end = after.search(/投资经理的变更|（[二2２]）\s*投资经理的变更/);
+    const body = end > 20 ? after.slice(0, end) : after.slice(0, 2500);
+    const names = [];
+    for (const line of body.split(/\n/)) {
+      const hit = line.trim().match(/^([\u4e00-\u9fff]{2,4})[：:，,]/);
+      if (!hit || /投资|管理|变更|指定|本集/.test(hit[1])) continue;
+      if (!names.includes(hit[1])) names.push(hit[1]);
+    }
+    if (names.length) return names;
+  }
+  return [];
 }
 
 function fieldManager(text) {
