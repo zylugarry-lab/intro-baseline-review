@@ -9,8 +9,8 @@ export function extractCore(raw) {
   const type = fieldType(basic);
   const manager = fieldManager(text);
   const custodian = fieldCustodian(text);
-  const scope = investmentBlock(basic, /主要投资方向|投资方向[：:]/, /投资比例/)
-    || investmentBlock(basic, /(?:^|\n)\s*(?:[（(]?[0-9一二三四五六七八九十]+[）).、．]\s*)?投资范围[：:]?/, /投资比例/);
+  const scope = compact(investmentBlock(basic, /主要投资方向|投资方向[：:]/, /投资比例/)
+    || investmentBlock(basic, /(?:^|\n)\s*(?:[（(]?[0-9一二三四五六七八九十]+[）).、．]\s*)?投资范围[：:]?/, /投资比例/));
   const ratio = compact(investmentBlock(basic, /投资比例/, /产品风险等级|风险评级评价为/));
   const strategy = fieldStrategy(text);
   const duration = fieldDuration(basic);
