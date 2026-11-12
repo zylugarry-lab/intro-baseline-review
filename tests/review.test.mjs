@@ -13,7 +13,7 @@ import { composeElements, contractManagerNames, extractCore } from '../src/eleme
 import { planCoverNameEdits, planElementEdits } from '../src/element-review.js';
 import { planManagerEdits } from '../src/managers.js';
 import { planLockEdits } from '../src/lock.js';
-import { buildPoster, posterCopy, posterFileName, posterLayout } from '../src/poster.js';
+import { buildPoster, posterCopy, posterFileName, posterLayout, wrapTitle } from '../src/poster.js';
 import { binaryDocText, wordKind } from '../src/word.js';
 
 globalThis.DOMParser = DOMParser;
@@ -354,7 +354,16 @@ const posterBytes = await buildPoster(read('assets/poster-template.pptx'), { ele
 const posterXml = await JSZip.loadAsync(posterBytes).then(zip => zip.file('ppt/slides/slide1.xml').async('string'));
 check(posterXml.includes('福星多元稳健19号') && !posterXml.includes('星聚'), '海报模板换成合同产品名称');
 check(posterXml.includes('风险等级：') && posterXml.includes('R3（中风险）') && posterXml.includes('C3-C5'), '海报写入风险等级大字和简写');
-check(posterXml.includes('953794') && posterXml.includes('9月28日 正式开放') && posterXml.includes('管理费率：0.6%/年'), '海报写入代码、日期和费率');
+check(posterXml.includes('953794') && posterXml.includes('9月28日 正式开放') && posterXml.includes('参与费：0%') && posterXml.includes('退出费：0%') && posterXml.includes('管理费率：0.6%/年'), '海报产品费率写上参与费、退出费、管理费和托管费');
+const tierPoster = posterCopy({
+  elements: [
+    { label: '产品名称', value: '测试集合资产管理计划' },
+    { label: '参与/退出费率', value: '认购费率：参与金额<1000万，0.2%；参与金额≥1000万，0%。\n参与费率：参与金额<1000万，0.2%；参与金额≥1000万，0%。\n退出费率0%' },
+    { label: '产品费率', value: '固定管理费率：1%/年；托管费率：0.05%/年' },
+  ],
+});
+const tierFee = tierPoster.rows.find(row => row.label === '产品费率：').value;
+check(tierFee.includes('认购费：参与金额<1000万，0.2%') && tierFee.includes('参与费：参与金额<1000万，0.2%') && tierFee.includes('退出费：0%') && tierFee.includes('托管费率：0.05%/年'), '分档时产品费率同时写出认购费、参与费和退出费');
 check(!posterXml.includes('40万元'), '海报不再保留模板里的起购金额');
 const frame = { slideH: 11878945, bodyWidth: 6000000, bodyTop: 7060000, titleWidth: 4200000, titleTop: 4540000, disclaimerWidth: 6400000 };
 const shortLayout = posterLayout(poster, frame);
@@ -371,7 +380,9 @@ const nameLayout = posterLayout(longName, frame);
 check(longLayout.body.sz < shortLayout.body.sz, '正文变长时字号缩小');
 check(longLayout.body.y + longLayout.body.h <= longLayout.disclaimer.y, '正文不会压住底部风险揭示');
 check(longLayout.disclaimer.y + longLayout.disclaimer.h <= frame.slideH, '风险揭示落在页面里面');
-check(nameLayout.title.nameSz < shortLayout.title.nameSz, '产品名称变长时标题缩小');
+const nameLines = wrapTitle('国泰海通君盈大类资产全方略QDII1号', frame.titleWidth, 3200);
+check(nameLines.some(line => line.includes('大类资产全方略')) && !nameLines.some(line => line.endsWith('大类资产')), '标题不把大类资产和全方略拆开');
+check(nameLayout.title.lines.every(line => !line.endsWith('大类资')), '长名称不会把大类资产拆成两行');
 
 const cycleFile = '/Users/luzhiyuan/Desktop/【一页通202604】君享大类资产全周期1号.docx';
 if (existsSync(cycleFile)) {

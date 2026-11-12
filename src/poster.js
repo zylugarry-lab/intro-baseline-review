@@ -41,12 +41,37 @@ function suitability(code, channel) {
 }
 
 function feeLine(participate, productFee) {
-  const left = flat(participate);
-  const right = flat(productFee).replace(/固定管理费率/g, '管理费率');
+  const source = flat(participate);
+  const take = (label) => {
+    const found = source.match(new RegExp(`${label}[：:]?\\s*([\\s\\S]*?)(?=认购费率|参与费率|退出费率|$)`));
+    if (!found) return '';
+    const text = found[1].replace(/[。；;\s]+$/g, '').trim();
+    if (!text) return '';
+    return /%/.test(text) ? text : `${text}%`;
+  };
+  let subscribe = '';
+  let enter = '';
+  let exit = '';
+  if (!source || source === '0%' || source === '0') {
+    enter = '0%';
+    exit = '0%';
+  } else {
+    subscribe = take('认购费率');
+    enter = take('参与费率');
+    exit = take('退出费率');
+    if (!subscribe && !enter && !exit) {
+      const text = /%/.test(source) ? source : `${source}%`;
+      enter = text;
+      exit = text;
+    }
+  }
   const parts = [];
-  if (left) parts.push(/费率/.test(left) ? left : `参与/退出费率：${left}`);
+  if (subscribe) parts.push(`认购费：${subscribe}`);
+  if (enter) parts.push(`参与费：${enter}`);
+  if (exit) parts.push(`退出费：${exit}`);
+  const right = flat(productFee).replace(/固定管理费率/g, '管理费率');
   if (right) parts.push(right);
-  return parts.join('    ');
+  return parts.join('；');
 }
 
 export function posterCopy({ elements, channel = 'house', code = '', date = '', salesCode = '' } = {}) {
@@ -105,12 +130,56 @@ function rowsHeight(rows, width, sz) {
   return rows.reduce((total, row) => total + textHeight(row.label, width, sz) + textHeight(row.value, width, sz) + gap, 0);
 }
 
-function titleBlockHeight(name, riskLine, width, nameSz, subSz) {
+function lineLimit(width, sz) {
+  return Math.max(4, (width * 0.88) / ((sz / 100) * PT));
+}
+
+function titleTokens(text) {
+  return String(text || '').match(/国泰海通|国泰君安|大类资产全方略|大类资产|全方略|全周期|全天候|增利|定开债|定开|QDII\d*号?|FOF\d*号?|\d+M\d+号|\d+号|\d+期|[A-Za-z]+|\d+|[\u4e00-\u9fff]/g) || [];
+}
+
+export function wrapTitle(name, width, sz) {
   const main = String(name || '').replace(/集合资产管理计划/g, '').trim();
-  let height = textHeight(main || name, width, nameSz);
+  if (!main) return [];
+  const limit = lineLimit(width, sz);
+  const lines = [];
+  let current = '';
+  for (const token of titleTokens(main)) {
+    if (!current || textUnits(current + token) <= limit) current += token;
+    else {
+      lines.push(current);
+      current = token;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+function titleBlockHeight(name, riskLine, width, nameSz, subSz) {
+  const lines = wrapTitle(name, width, nameSz);
+  let height = lines.length * (nameSz / 100) * PT * 1.2;
   if (String(name || '').includes('集合资产管理计划')) height += (subSz / 100) * PT * 1.2;
   if (riskLine) height += textHeight(riskLine, width, subSz);
   return height + 4 * PT;
+}
+
+function chooseTitle(name, riskLine, width, room) {
+  const sizes = [3200, 3000, 2800, 2600, 2400, 2200, 2000, 1800];
+  let best = null;
+  let oneLine = null;
+  for (const sz of sizes) {
+    const subSz = Math.max(1600, sz - 400);
+    const lines = wrapTitle(name, width, sz);
+    const height = titleBlockHeight(name, riskLine, width, sz, subSz);
+    if (!lines.length || height > room) continue;
+    const candidate = { nameSz: sz, subSz, lines, h: height + 0.12 * CM };
+    if (!best) best = candidate;
+    if (lines.length === 1 && sz >= 2200) {
+      oneLine = candidate;
+      break;
+    }
+  }
+  return oneLine || best || { nameSz: 1800, subSz: 1600, lines: wrapTitle(name, width, 1800), h: Math.min(room, 3 * CM) };
 }
 
 export function posterLayout(copy, frame) {
@@ -146,19 +215,10 @@ export function posterLayout(copy, frame) {
   const room = Math.max(disclaimerY - gap - bodyTop, 0.8 * CM);
   const bodyH = Math.min(body.h + pad, room);
   const titleRoom = Math.max(bodyTop - gap - frame.titleTop, 2.2 * CM);
-  let nameSz = 1800;
-  let subSz = 1600;
-  for (const sz of [3200, 2800, 2600, 2400, 2200, 2000, 1800]) {
-    const nextSub = Math.max(1600, sz - 400);
-    if (titleBlockHeight(copy.name, copy.riskLine, frame.titleWidth, sz, nextSub) <= titleRoom) {
-      nameSz = sz;
-      subSz = nextSub;
-      break;
-    }
-  }
-  const titleH = Math.min(titleBlockHeight(copy.name, copy.riskLine, frame.titleWidth, nameSz, subSz) + 0.12 * CM, titleRoom);
+  const chosen = chooseTitle(copy.name, copy.riskLine, frame.titleWidth, titleRoom);
+  const titleH = Math.min(chosen.h, titleRoom);
   return {
-    title: { nameSz, subSz, y: frame.titleTop, h: titleH },
+    title: { nameSz: chosen.nameSz, subSz: chosen.subSz, lines: chosen.lines, y: frame.titleTop, h: titleH },
     body: { sz: body.sz, y: bodyTop, h: bodyH },
     disclaimer: { sz: disclaimerSz, y: disclaimerY, h: disclaimerH },
   };
@@ -235,14 +295,23 @@ function pairAfter(paragraphs, prefix) {
   return { label: paragraphs[index], value };
 }
 
-function writeTitle(shape, name, riskLine, nameSz, subSz) {
+function writeTitle(shape, lines, riskLine, nameSz, subSz, hasPlan) {
   const paragraph = children(shape.getElementsByTagNameNS(P, 'txBody')[0], A, 'p')[0];
-  const main = name.replace(/集合资产管理计划/g, '').trim();
-  const pieces = [{ text: main || name, sz: String(nameSz), bold: true }];
-  if (name.includes('集合资产管理计划')) pieces.push({ text: '集合资产管理计划', sz: String(subSz), bold: true, breakBefore: true });
+  const pieces = (lines.length ? lines : ['']).map((line, index) => ({ text: line, sz: String(nameSz), bold: true, breakBefore: index > 0 }));
+  if (hasPlan) pieces.push({ text: '集合资产管理计划', sz: String(subSz), bold: true, breakBefore: true });
   if (riskLine) pieces.push({ text: riskLine, sz: String(subSz), bold: true, breakBefore: true });
   writeParagraph(paragraph, pieces);
   tuneParagraph(paragraph, 0);
+  const bodyPr = shape.getElementsByTagNameNS(A, 'bodyPr')[0];
+  if (bodyPr) bodyPr.setAttribute('wrap', 'none');
+}
+
+function widenTitle(shape, slideW) {
+  const box = shapeBox(shape);
+  const right = Math.min(box.x + box.w, slideW - Math.round(0.15 * CM));
+  const x = Math.round(0.4 * CM);
+  box.off.setAttribute('x', String(x));
+  box.ext.setAttribute('cx', String(Math.max(right - x, box.w)));
 }
 
 function shapeBox(shape) {
@@ -342,10 +411,13 @@ export async function buildPoster(templateBytes, spec) {
   const zip = await globalThis.JSZip.loadAsync(templateBytes);
   const doc = parseXml(await zip.file('ppt/slides/slide1.xml').async('string'));
   const pres = parseXml(await zip.file('ppt/presentation.xml').async('string'));
-  const slideH = Number(pres.getElementsByTagNameNS(P, 'sldSz')[0].getAttribute('cy'));
+  const slideSize = pres.getElementsByTagNameNS(P, 'sldSz')[0];
+  const slideH = Number(slideSize.getAttribute('cy'));
+  const slideW = Number(slideSize.getAttribute('cx'));
   const title = shapeByName(doc, '标题 1');
   const bodyShape = shapeByName(doc, '文本框 20');
   const footer = shapeByName(doc, '副标题 2');
+  widenTitle(title, slideW);
   const layout = posterLayout(copy, {
     slideH,
     bodyWidth: usableWidth(bodyShape),
@@ -354,7 +426,7 @@ export async function buildPoster(templateBytes, spec) {
     titleTop: shapeBox(title).y,
     disclaimerWidth: usableWidth(footer),
   });
-  writeTitle(title, copy.name, copy.riskLine, layout.title.nameSz, layout.title.subSz);
+  writeTitle(title, layout.title.lines, copy.riskLine, layout.title.nameSz, layout.title.subSz, copy.name.includes('集合资产管理计划'));
   placeShape(title, layout.title.y, layout.title.h);
   stopAutofit(title);
   const disclaimer = bodyParagraphs(footer).paragraphs.find(paragraph => textOf(paragraph).trim()) || bodyParagraphs(footer).paragraphs[0];
