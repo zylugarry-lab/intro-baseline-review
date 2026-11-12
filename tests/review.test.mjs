@@ -382,6 +382,7 @@ check(longLayout.body.y + longLayout.body.h <= longLayout.disclaimer.y, '正文�
 check(longLayout.disclaimer.y + longLayout.disclaimer.h <= frame.slideH, '风险揭示落在页面里面');
 const nameLines = wrapTitle('国泰海通君盈大类资产全方略QDII1号', frame.titleWidth, 3200);
 check(nameLines.some(line => line.includes('大类资产全方略')) && !nameLines.some(line => line.endsWith('大类资产')), '标题不把大类资产和全方略拆开');
+check(wrapTitle('国泰海通君享恒利QDII2/QDII3号', frame.titleWidth, 3200).join('').includes('QDII2/QDII3'), '标题保留名称里的斜杠');
 check(nameLayout.title.lines.every(line => !line.endsWith('大类资')), '长名称不会把大类资产拆成两行');
 
 const cycleFile = '/Users/luzhiyuan/Desktop/【一页通202604】君享大类资产全周期1号.docx';
