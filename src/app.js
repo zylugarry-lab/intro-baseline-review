@@ -582,6 +582,10 @@ function renderOnePagers() {
     : '选择文件后开始核对。';
 }
 
+function onePagerDownloadName(fileName) {
+  return downloadName(fileName, { productName: elementValue('产品名称'), asOf: state.asOf });
+}
+
 function riskHint() {
   const risk = elementValue('产品风险等级');
   if (!risk) return '还没上传合同，这次只核对公司和经理介绍。';
@@ -617,12 +621,23 @@ function renderResults(results) {
   $('results').querySelectorAll('[data-download]').forEach(button => {
     button.addEventListener('click', () => {
       const item = results[Number(button.dataset.download)];
-      saveBlob(item.bytes, downloadName(item.fileName), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      saveBlob(item.bytes, onePagerDownloadName(item.fileName), 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     });
   });
   $('download-zip')?.addEventListener('click', async () => {
     const zip = new JSZip();
-    results.filter(item => item.changed).forEach(item => zip.file(downloadName(item.fileName), item.bytes));
+    const used = new Set();
+    results.filter(item => item.changed).forEach(item => {
+      let name = onePagerDownloadName(item.fileName);
+      if (used.has(name)) {
+        const stem = name.replace(/\.docx$/i, '');
+        let index = 2;
+        while (used.has(`${stem}（${index}）.docx`)) index += 1;
+        name = `${stem}（${index}）.docx`;
+      }
+      used.add(name);
+      zip.file(name, item.bytes);
+    });
     const bytes = await zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
     saveBlob(bytes, `介绍修订-${state.asOf}.zip`, 'application/zip');
   });

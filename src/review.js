@@ -136,7 +136,21 @@ async function ensureTracking(zip) {
   zip.file('word/settings.xml', serializeXml(doc));
 }
 
-export function downloadName(fileName) {
+export function downloadName(fileName, { productName = '', asOf = '' } = {}) {
+  const stamp = String(asOf || '').match(/^(\d{4})-(\d{2})/);
+  const short = shortProductName(productName);
+  if (stamp && short) return `【一页通  ${stamp[1]}${stamp[2]}】${short}.docx`;
   const stem = String(fileName || '一页通.docx').replace(/\.docx?$/i, '');
   return `${stem}（介绍修订）.docx`;
+}
+
+function shortProductName(value) {
+  return String(value || '')
+    .split('\n')[0]
+    .replace(/[（(]\s*产品代码[：:][^）)]*[）)]/g, '')
+    .replace(/集合资产管理计划/g, '')
+    .replace(/[/／\\]/g, ' ')
+    .replace(/[：:*?"<>|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }

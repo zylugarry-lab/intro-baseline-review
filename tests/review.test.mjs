@@ -190,6 +190,7 @@ const renamed = await reviewOnePager({
 });
 check(renamed.changed, '扩展名是 .doc、内容是 docx 的一页通可以核对');
 check(downloadName('汇享全周期.doc') === '汇享全周期（介绍修订）.docx', '旧扩展名下载时改成 docx');
+check(downloadName('旧名.docx', { productName: '国泰海通君盈瑞合增利FOF1号集合资产管理计划（产品代码：S12345）', asOf: '2026-11-10' }) === '【一页通  202611】国泰海通君盈瑞合增利FOF1号.docx', '下载文件名用制作年月和合同简称');
 let binaryRejected = false;
 try {
   await reviewOnePager({
