@@ -234,7 +234,7 @@ function elementSheetXml(rows) {
     return `<row r="${row}" ht="${elementRowHeight(pair[1])}" customHeight="1"><c r="A${row}" t="inlineStr" s="1"><is><t xml:space="preserve">${escapeXml(pair[0])}</t></is></c><c r="B${row}" t="inlineStr" s="2"><is><t xml:space="preserve">${escapeXml(pair[1])}</t></is></c></row>`;
   }).join('');
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="${NS.ss}"><cols><col min="1" max="1" width="28" customWidth="1"/><col min="2" max="2" width="88" customWidth="1"/></cols><sheetData>${body}</sheetData></worksheet>`;
+<worksheet xmlns="${NS.ss}"><cols><col min="1" max="1" width="18" customWidth="1"/><col min="2" max="2" width="88" customWidth="1"/></cols><sheetData>${body}</sheetData></worksheet>`;
 }
 
 function elementRowHeight(value) {

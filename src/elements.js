@@ -51,7 +51,7 @@ export function composeElements(core, manual) {
     ["投资策略", core.strategy || ""],
     ["存续期", core.duration || ""],
     ["开放期", opening],
-    ["认购/参与费率，退出费率", participate],
+    ["参与/退出费率", participate],
     ["首参金额", first],
     ["产品费率", productFee],
     ["业绩报酬", performanceText(core, manual)],

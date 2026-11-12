@@ -223,7 +223,7 @@ const elementPlan = planElementEdits(elementRows, [
   { label: '管理人', value: '上海国泰海通证券资产管理有限公司' },
   { label: '投资范围', value: '新的投资范围' },
   { label: '产品类型', value: '固定收益类集合资产管理计划' },
-  { label: '认购/参与费率，退出费率', value: '0%' },
+  { label: '参与/退出费率', value: '0%' },
   { label: '投资策略', value: '合同里的策略' },
 ]);
 check(elementPlan.labels.join('、') === '产品名称、投资范围', '只改产品要素表里对不上的格子');
@@ -235,9 +235,9 @@ const feePlan = planElementEdits(elementRows, [
   { label: '管理人', value: '上海国泰海通证券资产管理有限公司' },
   { label: '投资范围', value: '范围前半\n范围后半' },
   { label: '产品类型', value: '固定收益类集合资产管理计划' },
-  { label: '认购/参与费率，退出费率', value: '认购费率：0.2%。' },
+  { label: '参与/退出费率', value: '认购费率：0.2%。' },
 ]);
-check(feePlan.edits.some(edit => edit.before === '0%' && edit.after === '认购费率：0.2%。'), '新的费率字段名仍对上一页通的参与/退出费率');
+check(feePlan.edits.some(edit => edit.before === '0%' && edit.after === '认购费率：0.2%。'), '参与/退出费率仍对上一页通里的同名格子');
 
 const factRun = await reviewOnePager({
   bytes: read(onePagers[0]), fileName: onePagers[0], variant: 'general', records: managers.records, asOf: AS_OF,
@@ -296,10 +296,10 @@ const tierFees = composeElements(extractCore([
   '5、托管费率',
   '本集合计划的年托管费率为0.05%。',
 ].join('\n')), { channel: 'house' });
-const tierRate = tierFees.find(row => row[0] === '认购/参与费率，退出费率')[1];
+const tierRate = tierFees.find(row => row[0] === '参与/退出费率')[1];
 check(tierRate.includes('认购费率：参与金额<1000万，0.2%；参与金额≥1000万，0%。') && tierRate.includes('参与费率：参与金额<1000万，0.2%；参与金额≥1000万，0%。') && tierRate.includes('退出费率0%'), '认购费和参与费的分档写进参与/退出费率');
 check(tierFees.find(row => row[0] === '产品费率')[1] === '固定管理费率：1%/年；托管费率：0.05%/年', '分档参与费不改管理费和托管费');
-check(composeElements(extractCore('1、认购费率：0%\n2、存续期参与费率：0%\n3、退出费率：0%\n'), { channel: 'house' }).find(row => row[0] === '认购/参与费率，退出费率')[1] === '0%', '没有分档时参与费和退出费都是 0 仍写成 0%');
+check(composeElements(extractCore('1、认购费率：0%\n2、存续期参与费率：0%\n3、退出费率：0%\n'), { channel: 'house' }).find(row => row[0] === '参与/退出费率')[1] === '0%', '没有分档时参与费和退出费都是 0 仍写成 0%');
 
 const cycleFile = '/Users/luzhiyuan/Desktop/【一页通202604】君享大类资产全周期1号.docx';
 if (existsSync(cycleFile)) {
