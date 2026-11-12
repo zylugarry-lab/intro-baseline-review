@@ -6,6 +6,7 @@ import { applySalesRating } from './risk.js';
 import { binaryDocText, wordKind } from './word.js';
 import { readStored, removeStored, writeStored } from './store.js';
 import { refreshBiography, shanghaiToday } from './years.js';
+import { buildPoster, posterFileName } from './poster.js';
 
 const defaults = {
   managers: { url: './assets/manager-introductions.xlsx', name: '投资经理介绍.xlsx' },
@@ -115,6 +116,7 @@ function elementPayload() {
       nameTouched: contract.nameTouched,
       riskTouched: contract.riskTouched,
       notes: contract.notes,
+      posterDate: contract.posterDate || '',
     })),
   };
 }
@@ -482,6 +484,7 @@ function renderElements() {
       <td><textarea data-element="${escapeHtml(row.label)}" rows="${tall.has(row.label) ? 4 : 2}">${escapeHtml(row.value)}</textarea></td>
     </tr>`).join('')}</tbody></table>`;
   renderOnePagers();
+  renderPoster();
 }
 
 function restoreElements(saved) {
@@ -499,6 +502,7 @@ function restoreElements(saved) {
     nameTouched: Boolean(contract.nameTouched),
     riskTouched: Boolean(contract.riskTouched),
     notes: Array.isArray(contract.notes) ? contract.notes : [],
+    posterDate: contract.posterDate || '',
   }));
   const active = state.contracts.find(contract => contract.id === saved?.activeId) || state.contracts[0];
   if (active) activateContract(active.id);
@@ -535,6 +539,7 @@ async function readContracts(files) {
         nameTouched: false,
         riskTouched: false,
         notes: core.notes || [],
+        posterDate: '',
         rows: [],
       };
       contract.rows = composeElements(core, { ...contract.manual, channel: channel(), perfMode: 'auto' }).map(([label, value]) => ({ label, value }));
@@ -570,6 +575,45 @@ function addOnePagers(files) {
   }
   state.onePagers.push(...accepted);
   renderOnePagers();
+}
+
+function renderPoster() {
+  const button = $('download-poster');
+  if (!button) return;
+  const active = activeContract();
+  const ready = Boolean(active?.rows?.length);
+  button.disabled = !ready;
+  const date = $('poster-date');
+  if (date && document.activeElement !== date) date.value = active?.posterDate || '';
+  $('poster-hint').textContent = ready
+    ? `将用${state.variant === 'ccb' ? '建行版' : '通用版'}风险话术，按「${contractTitle(active)}」生成海报。`
+    : '先在第一步上传合同。产品代码用上面填的那一格。';
+}
+
+async function downloadPoster() {
+  const error = $('poster-error');
+  error.hidden = true;
+  const active = activeContract();
+  if (!active?.rows?.length) {
+    error.hidden = false;
+    error.textContent = '先在第一步上传合同。';
+    return;
+  }
+  try {
+    const response = await fetch('./assets/poster-template.pptx');
+    if (!response.ok) throw new Error('海报模板没有读出来。');
+    const bytes = await buildPoster(new Uint8Array(await response.arrayBuffer()), {
+      elements: active.rows,
+      channel: channel(),
+      code: active.manual.code || '',
+      date: active.posterDate || '',
+      salesCode: active.manual.salesCode || '',
+    });
+    saveBlob(bytes, posterFileName(elementValue('产品名称'), state.asOf), 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+  } catch (failure) {
+    error.hidden = false;
+    error.textContent = failure.message || '海报没有生成。';
+  }
 }
 
 function renderOnePagers() {
@@ -881,8 +925,15 @@ function bind() {
       if (contract) contract.riskTouched = true;
     }
     renderOnePagers();
+    renderPoster();
     scheduleSave();
   });
+  $('poster-date').addEventListener('input', () => {
+    const contract = activeContract();
+    if (contract) contract.posterDate = $('poster-date').value;
+    scheduleSave();
+  });
+  $('download-poster').addEventListener('click', downloadPoster);
   $('onepager-list').addEventListener('click', event => {
     const index = event.target?.dataset?.remove;
     if (index == null) return;

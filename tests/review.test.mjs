@@ -13,6 +13,7 @@ import { composeElements, contractManagerNames, extractCore } from '../src/eleme
 import { planCoverNameEdits, planElementEdits } from '../src/element-review.js';
 import { planManagerEdits } from '../src/managers.js';
 import { planLockEdits } from '../src/lock.js';
+import { buildPoster, posterCopy, posterFileName } from '../src/poster.js';
 import { binaryDocText, wordKind } from '../src/word.js';
 
 globalThis.DOMParser = DOMParser;
@@ -331,6 +332,30 @@ const rosterEdits = planManagerEdits(rosterParagraphs, managers.records, AS_OF, 
 check(rosterEdits.edits.some(edit => edit.deleteParagraphId === 'n2') && rosterEdits.edits.some(edit => edit.deleteParagraphId === 'b2'), '合同里没有的投资经理从一页通删除');
 check(rosterEdits.reviews.some(item => item.name === '赵博阳' && item.status === 'inserted'), '合同里有、一页通没有的投资经理按底稿补上');
 check(!rosterEdits.edits.some(edit => edit.deleteParagraphId === 'n1'), '合同里有的投资经理保留');
+
+const posterRows = [
+  { label: '产品名称', value: '国泰海通福星多元稳健19号集合资产管理计划' },
+  { label: '管理人', value: '上海国泰海通证券资产管理有限公司' },
+  { label: '首参金额', value: '单个客户首次参与金额不低于30万元，追加参与的最低金额为人民币1万元。' },
+  { label: '业绩报酬', value: '本集合计划管理人不提取业绩报酬。' },
+  { label: '开放期', value: '每个开放期开放5个工作日。' },
+  { label: '参与/退出费率', value: '0%' },
+  { label: '产品费率', value: '固定管理费率：0.6%/年；托管费率：0.02%/年' },
+  { label: '产品风险等级', value: '管理人对于本集合计划的风险等级评定为R3（中风险），适合向合格投资者中的专业投资者和风险承受能力评估结果为C3-C5的普通投资者销售。' },
+];
+const poster = posterCopy({ elements: posterRows, channel: 'house', code: '953794', date: '9月28日 正式开放' });
+check(poster.riskLine === '风险等级：R3（中风险）', '海报产品名称下用合同里的风险等级');
+check(poster.suitability === '适合合格投资者中的专业投资者和风险承受能力C3-C5的普通投资者。', '通用版海报把适合投资者收成 C3-C5');
+check(poster.rows.some(row => row.label === '产品代码：' && row.value === '953794') && poster.rows.some(row => row.value === '9月28日 正式开放'), '海报带上产品代码和开放日期');
+const posterCcb = posterCopy({ elements: posterRows, channel: 'ccb' });
+check(posterCcb.suitability.includes('C3（平衡型）') && posterCcb.suitability.includes('C5（激进型）') && !posterCcb.suitability.includes('C1'), '建行海报从对应等级写到 C5');
+check(posterFileName(posterRows[0].value, AS_OF) === '【海报  202611】国泰海通福星多元稳健19号.pptx', '海报文件名用制作年月和合同简称');
+const posterBytes = await buildPoster(read('assets/poster-template.pptx'), { elements: posterRows, channel: 'house', code: '953794', date: '9月28日 正式开放' });
+const posterXml = await JSZip.loadAsync(posterBytes).then(zip => zip.file('ppt/slides/slide1.xml').async('string'));
+check(posterXml.includes('福星多元稳健19号') && !posterXml.includes('星聚'), '海报模板换成合同产品名称');
+check(posterXml.includes('风险等级：') && posterXml.includes('R3（中风险）') && posterXml.includes('C3-C5'), '海报写入风险等级大字和简写');
+check(posterXml.includes('953794') && posterXml.includes('9月28日 正式开放') && posterXml.includes('管理费率：0.6%/年'), '海报写入代码、日期和费率');
+check(!posterXml.includes('40万元'), '海报不再保留模板里的起购金额');
 
 const cycleFile = '/Users/luzhiyuan/Desktop/【一页通202604】君享大类资产全周期1号.docx';
 if (existsSync(cycleFile)) {
