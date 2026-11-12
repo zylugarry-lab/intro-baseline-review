@@ -600,7 +600,7 @@ async function downloadPoster() {
     return;
   }
   try {
-    const response = await fetch('./assets/poster-template.pptx');
+    const response = await fetch('./assets/poster-template.pptx?v=29');
     if (!response.ok) throw new Error('海报模板没有读出来。');
     const bytes = await buildPoster(new Uint8Array(await response.arrayBuffer()), {
       elements: active.rows,
