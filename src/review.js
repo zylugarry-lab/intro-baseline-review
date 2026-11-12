@@ -1,5 +1,5 @@
 import { planCompanyEdits } from './company.js';
-import { planElementEdits } from './element-review.js';
+import { planCoverNameEdits, planElementEdits } from './element-review.js';
 import { planLockEdits } from './lock.js';
 import { planManagerEdits } from './managers.js';
 import { planRiskEdits } from './risk.js';
@@ -44,6 +44,7 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
   const company = planCompanyEdits(sourceParagraphs, paragraphs, variant);
   const managers = planManagerEdits(paragraphs, records, asOf);
   const elementPlan = planElementEdits(paragraphs, elements);
+  const cover = planCoverNameEdits(paragraphs, (elements || []).find(row => row.label === '产品名称')?.value);
   const skipRisk = new Set();
   for (const edit of elementPlan.edits) {
     if (edit.paragraphId) skipRisk.add(edit.paragraphId);
@@ -51,7 +52,7 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
   }
   const risk = planRiskEdits(paragraphs, elementRisk, skipRisk);
   const lock = planLockEdits(paragraphs, elements, skipRisk);
-  const edits = [...company.edits, ...managers.edits, ...elementPlan.edits, ...risk.edits, ...lock.edits];
+  const edits = [...company.edits, ...managers.edits, ...elementPlan.edits, ...cover.edits, ...risk.edits, ...lock.edits];
   const warnings = [...company.warnings, ...managers.warnings, ...elementPlan.warnings, ...risk.warnings, ...lock.warnings];
   const byParagraph = new Map();
   const blocked = new Set();

@@ -66,6 +66,64 @@ export function planElementEdits(paragraphs, rows) {
   return { edits, warnings, labels };
 }
 
+export function planCoverNameEdits(paragraphs, productName) {
+  const name = productTitle(productName);
+  if (!name) return { edits: [], labels: [] };
+  const title = [];
+  for (const paragraph of paragraphs) {
+    if (paragraph.part !== 'word/document.xml' || paragraph.tableId) continue;
+    const text = paragraph.text.trim();
+    if (!text) {
+      if (title.length) break;
+      continue;
+    }
+    if (!isCoverName(text)) break;
+    title.push(paragraph);
+    if (title.length >= 3) break;
+  }
+  if (!title.length) return { edits: [], labels: [] };
+  const current = title.map(paragraph => paragraph.text.trim()).join('');
+  if (compact(current) === compact(name)) return { edits: [], labels: [] };
+  const [first, ...rest] = title;
+  const before = first.text.trim();
+  const edits = [{
+    paragraphId: first.id,
+    start: first.text.indexOf(before),
+    before,
+    after: name,
+    label: '产品名称',
+    source: 'element',
+  }];
+  for (const paragraph of rest) edits.push({ deleteParagraphId: paragraph.id, label: '产品名称', source: 'element' });
+  const oldName = compact(current);
+  for (const paragraph of paragraphs) {
+    if (paragraph.part === 'word/document.xml' || title.some(item => item.id === paragraph.id)) continue;
+    const text = paragraph.text.trim();
+    if (!text || compact(text) !== oldName) continue;
+    edits.push({
+      paragraphId: paragraph.id,
+      start: paragraph.text.indexOf(text),
+      before: text,
+      after: name,
+      label: '产品名称',
+      source: 'element',
+    });
+  }
+  return { edits, labels: ['产品名称'] };
+}
+
+function productTitle(value) {
+  return String(value || '').split('\n')[0].replace(/[（(]\s*产品代码[：:][^）)]*[）)]/g, '').trim();
+}
+
+function isCoverName(text) {
+  const value = text.replace(/\s+/g, '');
+  if (!value || value.length > 60) return false;
+  if (/产品代码|有风险|须谨慎|本产品由|本材料|雄厚|销售机构|代销|披露|股东|注册资本/.test(value)) return false;
+  if (value === '集合资产管理计划') return true;
+  return /号/.test(value) && /计划|资产|QDII|FOF|债|君/.test(value);
+}
+
 function findElementTable(paragraphs) {
   const tables = new Map();
   for (const paragraph of paragraphs) {

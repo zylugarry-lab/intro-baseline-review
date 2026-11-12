@@ -10,7 +10,7 @@ import { applyParagraphEdits } from '../src/revise.js';
 import { collectParagraphs, parseXml } from '../src/xml.js';
 import { planRiskEdits, parseRiskStatement } from '../src/risk.js';
 import { composeElements, extractCore } from '../src/elements.js';
-import { planElementEdits } from '../src/element-review.js';
+import { planCoverNameEdits, planElementEdits } from '../src/element-review.js';
 import { planLockEdits } from '../src/lock.js';
 import { binaryDocText, wordKind } from '../src/word.js';
 
@@ -238,6 +238,14 @@ const feePlan = planElementEdits(elementRows, [
   { label: '参与/退出费率', value: '认购费率：0.2%。' },
 ]);
 check(feePlan.edits.some(edit => edit.before === '0%' && edit.after === '认购费率：0.2%。'), '参与/退出费率仍对上一页通里的同名格子');
+const cover = planCoverNameEdits([
+  { id: 'a', part: 'word/document.xml', text: '国泰君安君享年华定开债8号' },
+  { id: 'b', part: 'word/document.xml', text: '集合资产管理计划' },
+  { id: 'c', part: 'word/document.xml', text: '产品有风险，投资须谨慎。' },
+  { id: 'd', part: 'word/document.xml', text: '国泰君安君享年华定开债8号集合资产管理计划适合稳健投资者。' },
+], '国泰海通建盈君享年华定开债8号集合资产管理计划（产品代码：S1）');
+check(cover.edits[0]?.before === '国泰君安君享年华定开债8号' && cover.edits[0].after === '国泰海通建盈君享年华定开债8号集合资产管理计划', '一页通开头的产品名称改成合同名称');
+check(cover.edits.some(edit => edit.deleteParagraphId === 'b') && !cover.edits.some(edit => edit.paragraphId === 'd'), '封面名称换行后的“集合资产管理计划”删掉，正文里的产品名不动');
 
 const factRun = await reviewOnePager({
   bytes: read(onePagers[0]), fileName: onePagers[0], variant: 'general', records: managers.records, asOf: AS_OF,
@@ -253,6 +261,13 @@ const factRun = await reviewOnePager({
 check(factRun.elementLabels.includes('产品名称') && !factRun.elementLabels.includes('管理人') && !factRun.elementLabels.includes('存续期'), '真实一页通只改不一致的产品要素');
 const factParagraphs = await visibleParagraphs(factRun.bytes);
 check(factParagraphs.some(paragraph => paragraph.text.includes('产品代码：S12345')), '修订后的产品要素表写入了要素表里的产品名称');
+const coverRun = await reviewOnePager({
+  bytes: read(onePagers[0]), fileName: onePagers[0], variant: 'general', records: [], asOf: AS_OF,
+  companyBytes: read('assets/company-introduction-general.docx'),
+  elements: [{ label: '产品名称', value: '国泰海通君盈瑞合增利FOF2号集合资产管理计划' }],
+});
+const coverParagraphs = await visibleParagraphs(coverRun.bytes);
+check(coverParagraphs.some(paragraph => paragraph.text.includes('FOF2号集合资产管理计划') && paragraph.text.length < 40), '一页通封面产品名称改成合同里的名称');
 
 const lockSentence = '7、本产品存在锁定期，委托人每笔份额需持有满180天，可能存在流动性风险。';
 const openingSentence = '特别的，投资者每笔份额持有时间不得少于180天。合同另有约定的，从其约定。';
