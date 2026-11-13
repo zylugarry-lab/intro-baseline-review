@@ -352,7 +352,7 @@ check(posterCcb.suitability.includes('C3（平衡型）') && posterCcb.suitabili
 check(posterFileName(posterRows[0].value, AS_OF) === '【海报  202611】国泰海通福星多元稳健19号.pptx', '海报文件名用制作年月和合同简称');
 const posterBytes = await buildPoster(read('assets/poster-template.pptx'), { elements: posterRows, channel: 'house', code: '953794', date: '9月28日 正式开放' });
 const posterXml = await JSZip.loadAsync(posterBytes).then(zip => zip.file('ppt/slides/slide1.xml').async('string'));
-check(posterXml.includes('福星多元稳健19号') && !posterXml.includes('星聚'), '海报模板换成合同产品名称');
+check(posterXml.includes('国泰海通福星') && posterXml.includes('多元稳健19号') && !posterXml.includes('星聚'), '海报模板换成合同产品名称');
 check(posterXml.includes('风险等级：') && posterXml.includes('R3（中风险）') && posterXml.includes('C3-C5'), '海报写入风险等级大字和简写');
 check(posterXml.includes('953794') && posterXml.includes('9月28日 正式开放') && posterXml.includes('参与费：0%') && posterXml.includes('退出费：0%') && posterXml.includes('管理费率：0.6%/年'), '海报产品费率写上参与费、退出费、管理费和托管费');
 const tierPoster = posterCopy({
@@ -384,6 +384,23 @@ const nameLines = wrapTitle('国泰海通君盈大类资产全方略QDII1号', f
 check(nameLines.some(line => line.includes('大类资产全方略')) && !nameLines.some(line => line.endsWith('大类资产')), '标题不把大类资产和全方略拆开');
 check(wrapTitle('国泰海通君享恒利QDII2/QDII3号', frame.titleWidth, 3200).join('').includes('QDII2/QDII3'), '标题保留名称里的斜杠');
 check(nameLayout.title.lines.every(line => !line.endsWith('大类资')), '长名称不会把大类资产拆成两行');
+const starLayout = posterLayout(posterCopy({
+  elements: [
+    { label: '产品名称', value: '国泰海通星聚大类资产配置1号集合资产管理计划' },
+    { label: '产品风险等级', value: 'R3（中风险）' },
+  ],
+}), {
+  slideH: 11878945,
+  bodyWidth: 6000000,
+  bodyTop: 7066800,
+  titleWidth: 4320000,
+  titleNameWidth: 3420000,
+  titleTop: 4896000,
+  disclaimerWidth: 6400000,
+});
+check(starLayout.title.nameSz === 3200 && starLayout.title.subSz === 2800, '产品名称用32磅，副标题用28磅');
+check(starLayout.title.lines.join('|') === '国泰海通星聚|大类资产配置1号', '星聚标题按词分成两行');
+check(starLayout.title.y === 4896000 && starLayout.title.y + starLayout.title.h < 4896000 + 4.6 * 360000, '标题放在灯塔右侧、黄条上方');
 
 const cycleFile = '/Users/luzhiyuan/Desktop/【一页通202604】君享大类资产全周期1号.docx';
 if (existsSync(cycleFile)) {

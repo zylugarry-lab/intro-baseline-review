@@ -131,11 +131,11 @@ function rowsHeight(rows, width, sz) {
 }
 
 function lineLimit(width, sz) {
-  return Math.max(4, (width * 0.88) / ((sz / 100) * PT));
+  return Math.max(4, (width * 0.93) / ((sz / 100) * PT));
 }
 
 function titleTokens(text) {
-  return String(text || '').match(/国泰海通|国泰君安|大类资产全方略|大类资产配置|大类资产|全方略|全周期|全天候|增利|定开债|定开|QDII\d*(?:[/／]QDII\d*)*号?|FOF\d*号?|\d+M\d+号|\d+号|\d+期|[/／]|[A-Za-z]+|\d+|[\u4e00-\u9fff]/g) || [];
+  return String(text || '').match(/国泰海通|国泰君安|大类资产全方略|大类资产配置|大类资产|多元稳健|全方略|全周期|全天候|增利|定开债|定开|年华|QDII\d*(?:[/／]QDII\d*)*号?|FOF\d*号?|\d+M\d+号|\d+号|\d+期|[/／]|[A-Za-z]+|\d+|[\u4e00-\u9fff]/g) || [];
 }
 
 export function wrapTitle(name, width, sz) {
@@ -155,11 +155,11 @@ export function wrapTitle(name, width, sz) {
   return lines;
 }
 
-function titleBlockHeight(name, riskLine, width, nameSz, subSz) {
+function titleBlockHeight(name, riskLine, width, nameSz, subSz, wide) {
   const lines = wrapTitle(name, width, nameSz);
-  let height = lines.length * (nameSz / 100) * PT * 1.2;
-  if (String(name || '').includes('集合资产管理计划')) height += (subSz / 100) * PT * 1.2;
-  if (riskLine) height += textHeight(riskLine, width, subSz);
+  let height = lines.length * (nameSz / 100) * PT;
+  if (String(name || '').includes('集合资产管理计划')) height += (subSz / 100) * PT;
+  if (riskLine) height += (subSz / 100) * PT * (fitsOneLine(riskLine, wide || width, subSz) ? 1 : 2);
   return height + 4 * PT;
 }
 
@@ -167,28 +167,24 @@ function fitsOneLine(text, width, sz) {
   return textUnits(text) <= lineLimit(width, sz);
 }
 
-function chooseTitle(name, riskLine, width, room) {
-  const sizes = [3200, 3000, 2800, 2600, 2400, 2200, 2000, 1800, 1600];
+function chooseTitle(name, riskLine, width, room, wide) {
+  const sizes = [3200, 3000, 2800, 2600, 2400];
   const plan = String(name || '').includes('集合资产管理计划') ? '集合资产管理计划' : '';
+  const riskWidth = wide || width;
   let best = null;
-  let oneLine = null;
   for (const sz of sizes) {
-    const subSz = Math.max(1600, sz - 400);
+    const subSz = Math.max(2000, sz - 400);
     const lines = wrapTitle(name, width, sz);
     if (!lines.length || lines.some(line => !fitsOneLine(line, width, sz))) continue;
-    if (plan && !fitsOneLine(plan, width, subSz)) continue;
-    if (riskLine && !fitsOneLine(riskLine, width, subSz)) continue;
-    const height = titleBlockHeight(name, riskLine, width, sz, subSz);
+    if (plan && !fitsOneLine(plan, riskWidth, subSz)) continue;
+    if (riskLine && !fitsOneLine(riskLine, riskWidth, subSz)) continue;
+    const height = titleBlockHeight(name, riskLine, width, sz, subSz, riskWidth);
     if (height > room) continue;
     if (lines.length > 1 && textUnits(lines[lines.length - 1]) <= 2.5) continue;
-    const candidate = { nameSz: sz, subSz, lines, h: height + 0.12 * CM };
-    if (!best) best = candidate;
-    if (lines.length === 1 && sz >= 2200) {
-      oneLine = candidate;
-      break;
-    }
+    best = { nameSz: sz, subSz, lines, h: height + 0.12 * CM };
+    break;
   }
-  return oneLine || best || { nameSz: 1800, subSz: 1600, lines: wrapTitle(name, width, 1800), h: Math.min(room, 3 * CM) };
+  return best || { nameSz: 2400, subSz: 2000, lines: wrapTitle(name, width, 2400), h: Math.min(room, 3 * CM) };
 }
 
 export function posterLayout(copy, frame) {
@@ -223,8 +219,8 @@ export function posterLayout(copy, frame) {
   }
   const room = Math.max(disclaimerY - gap - bodyTop, 0.8 * CM);
   const bodyH = Math.min(body.h + pad, room);
-  const titleRoom = Math.min(Math.max(bodyTop - gap - frame.titleTop, 2.2 * CM), 3.35 * CM);
-  const chosen = chooseTitle(copy.name, copy.riskLine, frame.titleWidth, titleRoom);
+  const titleRoom = 4.6 * CM;
+  const chosen = chooseTitle(copy.name, copy.riskLine, frame.titleNameWidth || frame.titleWidth, titleRoom, frame.titleWidth);
   const titleH = Math.min(chosen.h, titleRoom);
   return {
     title: { nameSz: chosen.nameSz, subSz: chosen.subSz, lines: chosen.lines, y: frame.titleTop, h: titleH },
@@ -310,18 +306,19 @@ function writeTitle(shape, lines, riskLine, nameSz, subSz, hasPlan) {
   if (hasPlan) pieces.push({ text: '集合资产管理计划', sz: String(subSz), bold: true, breakBefore: true });
   if (riskLine) pieces.push({ text: riskLine, sz: String(subSz), bold: true, breakBefore: true });
   writeParagraph(paragraph, pieces);
-  tuneParagraph(paragraph, 0);
+  tuneParagraph(paragraph, 0, 100000);
+  const props = children(paragraph, A, 'pPr')[0];
+  if (props) props.setAttribute('algn', 'r');
   const bodyPr = shape.getElementsByTagNameNS(A, 'bodyPr')[0];
   if (bodyPr) bodyPr.setAttribute('wrap', 'none');
 }
 
 function widenTitle(shape, slideW) {
   const box = shapeBox(shape);
-  // The lighthouse occupies the left side of the title band. Keep the name on the open area to its right.
-  const x = Math.round(7.4 * CM);
-  const right = Math.min(slideW - Math.round(0.45 * CM), Math.max(box.x + box.w, x + box.w));
+  const x = Math.round(6.3 * CM);
+  const right = slideW - Math.round(0.9 * CM);
   box.off.setAttribute('x', String(x));
-  box.ext.setAttribute('cx', String(Math.max(right - x, Math.round(8 * CM))));
+  box.ext.setAttribute('cx', String(Math.max(right - x, box.w)));
 }
 
 function shapeBox(shape) {
@@ -363,7 +360,7 @@ function stopAutofit(shape) {
   bodyPr.setAttribute('anchor', 't');
 }
 
-function tuneParagraph(paragraph, afterPts) {
+function tuneParagraph(paragraph, afterPts, linePct = 120000) {
   let props = children(paragraph, A, 'pPr')[0];
   if (!props) {
     props = paragraph.ownerDocument.createElementNS(A, 'a:pPr');
@@ -374,7 +371,7 @@ function tuneParagraph(paragraph, afterPts) {
   }
   const spacing = paragraph.ownerDocument.createElementNS(A, 'a:lnSpc');
   const percent = paragraph.ownerDocument.createElementNS(A, 'a:spcPct');
-  percent.setAttribute('val', '120000');
+  percent.setAttribute('val', String(linePct));
   spacing.appendChild(percent);
   props.appendChild(spacing);
   if (afterPts) {
@@ -433,7 +430,8 @@ export async function buildPoster(templateBytes, spec) {
     bodyWidth: usableWidth(bodyShape),
     bodyTop: shapeBox(bodyShape).y,
     titleWidth: usableWidth(title),
-    titleTop: shapeBox(title).y,
+    titleNameWidth: Math.round(9.5 * CM),
+    titleTop: Math.round(13.25 * CM),
     disclaimerWidth: usableWidth(footer),
   });
   writeTitle(title, layout.title.lines, copy.riskLine, layout.title.nameSz, layout.title.subSz, copy.name.includes('集合资产管理计划'));

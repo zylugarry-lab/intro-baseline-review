@@ -6,7 +6,7 @@ import { applySalesRating } from './risk.js';
 import { binaryDocText, wordKind } from './word.js';
 import { readStored, removeStored, writeStored } from './store.js';
 import { refreshBiography, shanghaiToday } from './years.js';
-import { buildPoster, posterFileName } from './poster.js?v=30';
+import { buildPoster, posterFileName } from './poster.js?v=31';
 
 const defaults = {
   managers: { url: './assets/manager-introductions.xlsx', name: '投资经理介绍.xlsx' },
