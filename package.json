@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node tests/review.test.mjs",
+    "test": "node --experimental-loader ./tests/loader.mjs tests/review.test.mjs",
     "serve": "python3 -m http.server 4173"
   },
   "dependencies": {

@@ -22,6 +22,11 @@ function productName(value) {
   return flat(value).split('\n')[0].replace(/[（(]\s*产品代码[：:][^）)]*[）)]/g, '').trim();
 }
 
+function productCode(value) {
+  const found = String(value || '').match(/[（(]\s*产品代码[：:]\s*([^）)]+?)\s*[）)]/);
+  return found ? found[1].trim() : '';
+}
+
 export function readPosterRisk(riskValue) {
   const text = String(riskValue || '');
   const code = text.match(/R[1-5]/)?.[0] || '';
@@ -75,14 +80,16 @@ function feeLine(participate, productFee) {
 }
 
 export function posterCopy({ elements, channel = 'house', code = '', date = '', salesCode = '' } = {}) {
-  const name = productName(field(elements, '产品名称'));
+  const rawName = field(elements, '产品名称');
+  const name = productName(rawName);
+  const resolvedCode = productCode(rawName) || String(code || '').trim();
   const risk = readPosterRisk(field(elements, '产品风险等级'));
   const riskLine = risk.code
     ? `风险等级：${risk.code}（${risk.word}）`
     : (risk.word ? `风险等级：${risk.word}` : '');
   const fit = suitability(risk.code, channel);
   const rows = [];
-  if (String(code || '').trim()) rows.push({ label: '产品代码：', value: String(code).trim() });
+  if (resolvedCode) rows.push({ label: '产品代码：', value: resolvedCode });
   if (String(date || '').trim()) rows.push({ label: '开放/销售日期：', value: String(date).trim() });
   rows.push(
     { label: '起购金额：', value: flat(field(elements, '首参金额')) },

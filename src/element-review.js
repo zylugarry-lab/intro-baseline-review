@@ -66,6 +66,33 @@ export function planElementEdits(paragraphs, rows) {
   return { edits, warnings, labels };
 }
 
+export function productCodeOf(value) {
+  const found = String(value || '').match(/[（(]\s*产品代码[：:]\s*([^）)]+?)\s*[）)]/);
+  return found ? found[1].trim() : '';
+}
+
+export function planProductCodeEdits(paragraphs, code) {
+  const next = String(code || '').trim();
+  if (!next) return { edits: [], labels: [] };
+  const edits = [];
+  for (const paragraph of paragraphs) {
+    const before = paragraph.text.trim();
+    const match = before.match(/^(产品代码|产品代号)\s*[：:]\s*(\S.*?)\s*$/);
+    if (!match) continue;
+    const after = `${match[1]}：${next}`;
+    if (compact(before) === compact(after)) continue;
+    edits.push({
+      paragraphId: paragraph.id,
+      start: paragraph.text.indexOf(before),
+      before,
+      after,
+      label: '产品代码',
+      source: 'element',
+    });
+  }
+  return { edits, labels: edits.length ? ['产品代码'] : [] };
+}
+
 export function planCoverNameEdits(paragraphs, productName) {
   const name = productTitle(productName);
   if (!name) return { edits: [], labels: [] };

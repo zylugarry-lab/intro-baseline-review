@@ -10,7 +10,7 @@ import { applyParagraphEdits } from '../src/revise.js';
 import { collectParagraphs, parseXml } from '../src/xml.js';
 import { planRiskEdits, parseRiskStatement } from '../src/risk.js';
 import { composeElements, contractManagerNames, extractCore } from '../src/elements.js';
-import { planCoverNameEdits, planElementEdits } from '../src/element-review.js';
+import { planCoverNameEdits, planElementEdits, planProductCodeEdits } from '../src/element-review.js';
 import { planManagerEdits } from '../src/managers.js';
 import { planLockEdits } from '../src/lock.js';
 import { buildPoster, posterCopy, posterFileName, posterLayout, wrapTitle } from '../src/poster.js';
@@ -271,6 +271,18 @@ const coverRun = await reviewOnePager({
 });
 const coverParagraphs = await visibleParagraphs(coverRun.bytes);
 check(coverParagraphs.some(paragraph => paragraph.text.includes('FOF2号集合资产管理计划') && paragraph.text.length < 40), '一页通封面产品名称改成合同里的名称');
+const codeRun = await reviewOnePager({
+  bytes: read('【持营一页通202609】国泰君安建盈君享年华定开债8号.docx'),
+  fileName: '年华.docx',
+  variant: 'general',
+  records: [],
+  asOf: AS_OF,
+  companyBytes: read('assets/company-introduction-general.docx'),
+  elements: [{ label: '产品名称', value: '国泰海通建盈君享年华定开债8号集合资产管理计划（产品代码：NEWCODE）' }],
+});
+const codeParagraphs = await visibleParagraphs(codeRun.bytes);
+check(codeParagraphs.some(paragraph => paragraph.text.includes('产品代码：NEWCODE')), '一页通单独的产品代码行改成要素里的代码');
+check(codeParagraphs.some(paragraph => paragraph.text.includes('国泰海通建盈君享年华定开债8号集合资产管理计划') && paragraph.text.length < 50), '一页通封面产品名称和代码一起按要素修改');
 
 const lockSentence = '7、本产品存在锁定期，委托人每笔份额需持有满180天，可能存在流动性风险。';
 const openingSentence = '特别的，投资者每笔份额持有时间不得少于180天。合同另有约定的，从其约定。';
@@ -304,7 +316,17 @@ const scopeByRange = extractCore([
 check(scopeByRange.scope.includes('投资于现金、银行存款') && scopeByRange.scope.includes('公募证券投资基金') && scopeByRange.scope.includes('债券回购') && !scopeByRange.scope.includes('\n'), '标题写成投资范围时也能抽出投资范围，并收成一段');
 check(!scopeByRange.scope.includes('2、投资范围') && !scopeByRange.scope.includes('固定收益类资产'), '投资范围不含标题，也不把投资比例带进来');
 const noFee = composeElements(extractCore('6、业绩报酬\n本集合计划不收取业绩报酬。\n7、其他费用'), { channel: 'house' }).find(row => row[0] === '业绩报酬')[1];
-check(noFee === '本集合计划不收取业绩报酬。', '不收取业绩报酬时直接抄合同这句话');
+check(noFee === '本集合计划不收取业绩报酬。', '没有业绩报酬时写成不收取业绩报酬');
+const waivedFee = composeElements(extractCore('业绩报酬\n本集合计划管理人不提取业绩报酬。'), { channel: 'house' }).find(row => row[0] === '业绩报酬')[1];
+check(waivedFee === '本集合计划不收取业绩报酬。', '合同写不提取业绩报酬时也改成不收取');
+const chargedFee = composeElements(extractCore('业绩报酬计提基准 3.5% ，提取 20% 作为业绩报酬。'), { channel: 'house' }).find(row => row[0] === '业绩报酬')[1];
+check(chargedFee.includes('超过3.5%的部分提取20%的业绩报酬。') && chargedFee.includes('业绩报酬计提日为计划分红登记日、投资者退出日和计划终止日。（业绩报酬计提标准以公告为准）') && chargedFee.endsWith('业绩报酬计提基准不构成收益承诺，实际收益可能低于该基准。'), '有业绩报酬时补上计提日和基准说明');
+const codeLine = planProductCodeEdits([
+  { id: 'c', part: 'word/document.xml', text: '产品代码：953794' },
+  { id: 'n', part: 'word/document.xml', text: '产品代码写在正文说明里，不单独成行。' },
+], '957077');
+check(codeLine.edits.length === 1 && codeLine.edits[0].after === '产品代码：957077', '一页通单独的产品代码行改成要素里的代码');
+check(planProductCodeEdits([{ id: 'c', part: 'word/document.xml', text: '产品代码：953794' }], '').edits.length === 0, '要素里没有代码时不改一页通的代码行');
 const tierFees = composeElements(extractCore([
   '1、认购费率：参与金额<1000万，0.2%；参与金额≥1000万，0%。',
   '2、参与费率：参与金额<1000万，0.2%；参与金额≥1000万，0%。',
@@ -347,6 +369,12 @@ const poster = posterCopy({ elements: posterRows, channel: 'house', code: '95379
 check(poster.riskLine === '风险等级：R3（中风险）', '海报产品名称下用合同里的风险等级');
 check(poster.suitability === '适合合格投资者中的专业投资者和风险承受能力C3-C5的普通投资者。', '通用版海报把适合投资者收成 C3-C5');
 check(poster.rows.some(row => row.label === '产品代码：' && row.value === '953794') && poster.rows.some(row => row.value === '9月28日 正式开放'), '海报带上产品代码和开放日期');
+const editedPoster = posterCopy({
+  elements: posterRows.map(row => row.label === '产品名称' ? { ...row, value: '网页上改过的名称（产品代码：ABC123）' } : row.label === '业绩报酬' ? { ...row, value: '网页上改过的业绩报酬。' } : row),
+  channel: 'house',
+  code: '953794',
+});
+check(editedPoster.name === '网页上改过的名称' && editedPoster.rows.some(row => row.label === '产品代码：' && row.value === 'ABC123') && editedPoster.rows.some(row => row.value === '网页上改过的业绩报酬。'), '海报采用网页上改过的产品名称、代码和业绩报酬');
 const posterCcb = posterCopy({ elements: posterRows, channel: 'ccb' });
 check(posterCcb.suitability.includes('C3（平衡型）') && posterCcb.suitability.includes('C5（激进型）') && !posterCcb.suitability.includes('C1'), '建行海报从对应等级写到 C5');
 check(posterFileName(posterRows[0].value, AS_OF) === '【海报  202611】国泰海通福星多元稳健19号.pptx', '海报文件名用制作年月和合同简称');

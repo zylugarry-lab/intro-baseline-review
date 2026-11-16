@@ -1,12 +1,12 @@
 import { companySections, selectVariant, COMPANY_LABELS } from './company.js';
-import { composeElements, extractCore } from './elements.js';
+import { composeElements, extractCore } from './elements.js?v=32';
 import { buildElementWorkbook, buildManagerWorkbook, parseManagerWorkbook } from './excel.js';
-import { downloadName, readDocxParagraphs, reviewOnePager } from './review.js';
+import { downloadName, readDocxParagraphs, reviewOnePager } from './review.js?v=32';
 import { applySalesRating } from './risk.js';
 import { binaryDocText, wordKind } from './word.js';
 import { readStored, removeStored, writeStored } from './store.js';
 import { refreshBiography, shanghaiToday } from './years.js';
-import { buildPoster, posterFileName } from './poster.js?v=31';
+import { buildPoster, posterFileName } from './poster.js?v=32';
 
 const defaults = {
   managers: { url: './assets/manager-introductions.xlsx', name: '投资经理介绍.xlsx' },
@@ -384,9 +384,32 @@ function elementValue(label) {
   return state.elements?.find(row => row.label === label)?.value || '';
 }
 
+function readLiveElements() {
+  const contract = activeContract();
+  if (!contract) return [];
+  for (const area of $('element-table').querySelectorAll('[data-element]')) {
+    const row = contract.rows.find(item => item.label === area.dataset.element);
+    if (row) row.value = area.value;
+  }
+  state.elements = contract.rows;
+  return contract.rows;
+}
+
+function nameWithoutCode(value) {
+  return String(value || '').replace(/[（(]\s*产品代码[：:][^）)]*[）)]/g, '').trim();
+}
+
+function nameWithCode(value, code) {
+  const base = nameWithoutCode(value);
+  const trimmed = String(code || '').trim();
+  return trimmed ? `${base}（产品代码：${trimmed}）` : base;
+}
+
 function setElementValue(label, value) {
   const row = state.elements?.find(item => item.label === label);
-  if (row) row.value = value;
+  if (!row) return;
+  row.value = value;
+  row.touched = true;
 }
 
 function activeContract() {
@@ -448,7 +471,7 @@ function refreshContract(contract) {
   }));
   const write = (label, value) => {
     const row = contract.rows.find(item => item.label === label);
-    if (row) row.value = value || '';
+    if (row && !row.touched) row.value = value || '';
   };
   if (!contract.nameTouched) write('产品名称', generated.get('产品名称'));
   if (!contract.riskTouched) write('产品风险等级', generated.get('产品风险等级'));
@@ -602,6 +625,7 @@ async function downloadPoster() {
   try {
     const response = await fetch('./assets/poster-template.pptx?v=29');
     if (!response.ok) throw new Error('海报模板没有读出来。');
+    readLiveElements();
     const bytes = await buildPoster(new Uint8Array(await response.arrayBuffer()), {
       elements: active.rows,
       channel: channel(),
@@ -694,6 +718,7 @@ async function runReview() {
   try {
     const paragraphs = state.companyParagraphs[state.variant] || [];
     const companyTextById = Object.fromEntries(paragraphs.map(paragraph => [paragraph.id, paragraph.text]));
+    const elements = readLiveElements();
     const results = [];
     for (const file of state.onePagers) {
       try {
@@ -702,7 +727,8 @@ async function runReview() {
           bytes, fileName: file.name, companyBytes: state.files[state.variant].bytes, variant: state.variant,
           records: state.records, asOf: state.asOf, companyTextById,
           elementRisk: elementValue('产品风险等级'),
-          elements: state.elements,
+          elements,
+          productCode: activeContract()?.manual.code || '',
         }));
       } catch (error) {
         results.push({
@@ -874,10 +900,19 @@ function bind() {
     }
   });
   $('product-code').addEventListener('input', () => {
-    state.manual.code = $('product-code').value;
-    applyGeneratedRows();
-    const name = $('element-table').querySelector('[data-element="产品名称"]');
-    if (name && !state.nameTouched) name.value = elementValue('产品名称');
+    const code = $('product-code').value.trim();
+    state.manual.code = code;
+    const contract = activeContract();
+    if (contract) {
+      contract.manual.code = code;
+      const row = contract.rows.find(item => item.label === '产品名称');
+      if (row) {
+        row.value = nameWithCode(row.value, code);
+        const area = $('element-table').querySelector('[data-element="产品名称"]');
+        if (area) area.value = row.value;
+      }
+    }
+    renderPoster();
     scheduleSave();
   });
   $('sales-risk').addEventListener('change', () => {
@@ -917,7 +952,16 @@ function bind() {
     if (label === '产品名称') {
       state.nameTouched = true;
       const contract = activeContract();
-      if (contract) contract.nameTouched = true;
+      if (contract) {
+        contract.nameTouched = true;
+        const found = String(event.target.value || '').match(/[（(]\s*产品代码[：:]\s*([^）)]*?)\s*[）)]/);
+        if (found || !/产品代码/.test(event.target.value)) {
+          const code = found ? found[1].trim() : '';
+          state.manual.code = code;
+          contract.manual.code = code;
+          if (document.activeElement !== $('product-code')) $('product-code').value = code;
+        }
+      }
     }
     if (label === '产品风险等级') {
       state.riskTouched = true;

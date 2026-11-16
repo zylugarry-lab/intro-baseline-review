@@ -37,7 +37,7 @@
 
     <section class="panel" id="contract">
       <h2>第一步 · 从合同提取要素</h2>
-      <p class="lede">上传一份或多份集合计划合同，doc 或 docx 都可以。每份合同单独提取要素，下载 Excel 时各放一个工作表。只提要素、不对一页通也可以。要对一页通时，点选其中一份。</p>
+      <p class="lede">上传一份或多份集合计划合同，doc 或 docx 都可以。每份合同单独提取要素，下载 Excel 时各放一个工作表。没有业绩报酬时写成“本集合计划不收取业绩报酬。”有业绩报酬时补上计提日，并说明计提基准不构成收益承诺。表格里改过或补过的文字，会按这一版去对一页通、生成海报。只提要素、不对一页通也可以。要对一页通时，点选其中一份。</p>
       <div class="upload-box drop" id="contract-drop">
         <strong>集合计划合同</strong>
         <p class="lede">doc 或 docx，可多选。文件只在这台浏览器里读取。</p>
@@ -132,7 +132,7 @@
 
     <section class="panel" id="compare">
       <h2>第三步 · 和一页通比对</h2>
-      <p class="lede">上传一份或多份一页通，doc 或 docx 都可以。公司介绍和经理简介对不上的地方会改。投资经理按合同名单增减，介绍仍用底稿。开头的产品名称和产品要素会按合同改成一致，最下面的风险揭示和锁定期天数也会跟着要素改。改动都是 Word 修订，可以下载。</p>
+      <p class="lede">上传一份或多份一页通，doc 或 docx 都可以。公司介绍和经理简介对不上的地方会改。投资经理按要素表里的名单增减，介绍仍用底稿。开头的产品名称、产品代码和产品要素表，都按网页上改过的这一版改成一致。最下面的风险揭示和锁定期天数也跟着这一版改。改动都是 Word 修订，可以下载。</p>
       <div class="upload-box drop" id="onepager-drop">
         <strong>一页通</strong>
         <p class="lede">doc 或 docx，可多选。旧的修订会在被改到的段落里先接受，再写下这一轮的修订；没改到的段落保持原样。</p>
@@ -149,7 +149,7 @@
 
     <section class="panel" id="poster">
       <h2>第四步 · 生成海报</h2>
-      <p class="lede">用当前这份合同的要素填进海报模板。产品名称下面写风险等级大字。海报上适合投资者的句子收成简写，例如 R3 写成 C3-C5；建行版仍写 C3（平衡型）这种全称。开放日期或销售日期在这里填，老产品的代码用第一步里的产品代码。</p>
+      <p class="lede">用网页上当前这份要素填进海报模板，包括你改过的产品名称、业绩报酬和其他格子。产品名称下面写风险等级大字。海报上适合投资者的句子收成简写，例如 R3 写成 C3-C5；建行版仍写 C3（平衡型）这种全称。开放日期或销售日期在这里填。产品代码用要素里的代码；老产品也可以在第一步的产品代码里填写。</p>
       <div class="element-tools">
         <label>开放/销售日期<input id="poster-date" type="text" autocomplete="off" placeholder="例如 9月28日 正式开放"></label>
         <button id="download-poster" class="primary" type="button" disabled>下载海报</button>
@@ -163,6 +163,6 @@
     <span>建行版不写“全面领先”和“资本实力位居行业最前列”。</span>
   </footer>
   <script src="./vendor/jszip.min.js"></script>
-  <script type="module" src="./src/app.js?v=31"></script>
+  <script type="module" src="./src/app.js?v=32"></script>
 </body>
 </html>

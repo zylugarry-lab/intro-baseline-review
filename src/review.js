@@ -1,5 +1,5 @@
 import { planCompanyEdits } from './company.js';
-import { planCoverNameEdits, planElementEdits } from './element-review.js';
+import { planCoverNameEdits, planElementEdits, planProductCodeEdits, productCodeOf } from './element-review.js?v=32';
 import { planLockEdits } from './lock.js';
 import { planManagerEdits } from './managers.js';
 import { planRiskEdits } from './risk.js';
@@ -29,7 +29,7 @@ export async function readDocxParagraphs(bytes) {
   return collectParagraphs(doc, 'word/document.xml');
 }
 
-export async function reviewOnePager({ bytes, fileName, companyBytes, variant, records, asOf, author = '介绍底稿', companyTextById = null, elementRisk = '', elements = null }) {
+export async function reviewOnePager({ bytes, fileName, companyBytes, variant, records, asOf, author = '介绍底稿', companyTextById = null, elementRisk = '', elements = null, productCode = '' }) {
   const kind = wordKind(bytes);
   if (kind === 'doc') throw new Error('这份一页通是旧版 .doc，原文件里写不了修订。请在 Word 中另存为 .docx 后再上传。');
   if (kind !== 'docx') throw new Error('一页通请使用 Word 文件（.doc 或 .docx）。');
@@ -52,7 +52,9 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
   const company = planCompanyEdits(sourceParagraphs, paragraphs, variant);
   const managers = planManagerEdits(paragraphs, records, asOf, managerRoster(elements));
   const elementPlan = planElementEdits(paragraphs, elements);
-  const cover = planCoverNameEdits(paragraphs, (elements || []).find(row => row.label === '产品名称')?.value);
+  const productNameValue = (elements || []).find(row => row.label === '产品名称')?.value;
+  const cover = planCoverNameEdits(paragraphs, productNameValue);
+  const codeLine = planProductCodeEdits(paragraphs, productCodeOf(productNameValue) || productCode);
   const skipRisk = new Set();
   for (const edit of elementPlan.edits) {
     if (edit.paragraphId) skipRisk.add(edit.paragraphId);
@@ -60,7 +62,7 @@ export async function reviewOnePager({ bytes, fileName, companyBytes, variant, r
   }
   const risk = planRiskEdits(paragraphs, elementRisk, skipRisk);
   const lock = planLockEdits(paragraphs, elements, skipRisk);
-  const edits = [...company.edits, ...managers.edits, ...elementPlan.edits, ...cover.edits, ...risk.edits, ...lock.edits];
+  const edits = [...company.edits, ...managers.edits, ...elementPlan.edits, ...cover.edits, ...codeLine.edits, ...risk.edits, ...lock.edits];
   const warnings = [...company.warnings, ...managers.warnings, ...elementPlan.warnings, ...risk.warnings, ...lock.warnings];
   const byParagraph = new Map();
   const blocked = new Set();
