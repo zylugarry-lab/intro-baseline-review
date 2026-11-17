@@ -78,17 +78,24 @@ function withPerformanceNote(text) {
   return `${body}\n${PERFORMANCE_FEE_NOTE}`;
 }
 
+function withoutAnnounceBenchmark(text) {
+  return String(text || "")
+    .replace(/业绩报酬计提基准以管理人公告为准。?/g, "")
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+}
+
 function withPerformanceStandard(text) {
-  let body = String(text || "").trim();
-  if (!body || body === NO_PERFORMANCE_FEE) return body;
-  if (!body.includes("业绩报酬计提日为计划分红登记日")) body = withPerformanceNote(body);
+  if (String(text || "").trim() === NO_PERFORMANCE_FEE) return NO_PERFORMANCE_FEE;
+  let body = withoutAnnounceBenchmark(text);
+  if (!body.includes("业绩报酬计提日为计划分红登记日")) body = withoutAnnounceBenchmark(withPerformanceNote(body));
   if (body.includes("1）当R≤R1时")) return body;
   const note = PERFORMANCE_FEE_NOTE;
   if (body.endsWith(note)) {
-    const head = body.slice(0, -note.length).trim();
+    const head = withoutAnnounceBenchmark(body.slice(0, -note.length));
     return [PERFORMANCE_FEE_STANDARD, head, note].filter(Boolean).join("\n");
   }
-  return `${PERFORMANCE_FEE_STANDARD}\n${body}`;
+  return [PERFORMANCE_FEE_STANDARD, body].filter(Boolean).join("\n");
 }
 
 function performanceText(core, manual) {
@@ -102,14 +109,14 @@ function performanceText(core, manual) {
     const r1 = num(manual.r1 || p.r1);
     const r2 = num(manual.r2 || p.r2);
     text = !b1 || !b2 || !r1 || !r2
-      ? "业绩报酬为阶梯计提。合同未写明两档基准，请在下方填写两个计提基准和两个提取比例。业绩报酬计提基准以管理人公告为准。"
+      ? "业绩报酬为阶梯计提。合同未写明两档基准，请在下方填写两个计提基准和两个提取比例。"
       : withPerformanceNote(`当年化收益率≤${b1}%时，不提取；当${b1}%＜年化收益率≤${b2}%时，对年化收益率大于${b1}%且不高于${b2}%的收益部分提取${r1}%比例的业绩报酬；当年化收益率＞${b2}%时，对年化收益率高于${b2}%的收益部分提取${r2}%的业绩报酬，及对年化收益率大于${b1}%且不高于${b2}%的收益部分提取${r1}%的业绩报酬。`);
   } else {
     const benchmark = num(manual.b1 || p.benchmark);
     const ratio = num(manual.r1 || p.ratio);
     if (benchmark && ratio) text = withPerformanceNote(`本集合计划对年化收益超过${benchmark}%的部分提取${ratio}%的业绩报酬。`);
-    else if (ratio) text = withPerformanceNote(`本集合计划对投资者每笔份额的持有期年化收益率超过业绩报酬计提基准的部分提取${ratio}%的业绩报酬。\n业绩报酬计提基准以管理人公告为准。`);
-    else text = withPerformanceNote("业绩报酬计提基准以管理人公告为准。");
+    else if (ratio) text = withPerformanceNote(`本集合计划对投资者每笔份额的持有期年化收益率超过业绩报酬计提基准的部分提取${ratio}%的业绩报酬。`);
+    else text = withPerformanceNote("");
   }
   return withPerformanceStandard(text);
 }
