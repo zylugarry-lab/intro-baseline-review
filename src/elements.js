@@ -64,6 +64,10 @@ export function composeElements(core, manual) {
 
 const NO_PERFORMANCE_FEE = "本集合计划不收取业绩报酬。";
 const PERFORMANCE_FEE_NOTE = "业绩报酬计提日为计划分红登记日、投资者退出日和计划终止日。（业绩报酬计提标准以公告为准）\n业绩报酬计提基准不构成收益承诺，实际收益可能低于该基准。";
+const PERFORMANCE_FEE_STANDARD = `业绩报酬计提标准为：
+1）当R≤R1时，本集合计划不提取业绩报酬；
+2）当R1＜R≤R2时，对年化收益率大于R1且不高于R2的收益部分提取F1比例的业绩报酬，即E=K×（R-R1）×F1×(T÷365)；
+3）当R＞R2时，对年化收益率高于R2的收益部分提取F2的业绩报酬及对年华收益率大于R1且不高于R2的收益部分提取F1的业绩报酬，即E=K×[(R-R2)×F2+（R2-R1）×F1]×（T÷365）`;
 
 function withPerformanceNote(text) {
   const body = String(text || "")
@@ -74,27 +78,33 @@ function withPerformanceNote(text) {
   return `${body}\n${PERFORMANCE_FEE_NOTE}`;
 }
 
+function withPerformanceStandard(text) {
+  const body = String(text || "").trim();
+  if (!body || body === NO_PERFORMANCE_FEE || body.includes("业绩报酬计提标准为：")) return body;
+  return `${body}\n${PERFORMANCE_FEE_STANDARD}`;
+}
+
 function performanceText(core, manual) {
   const mode = manual.perfMode || "auto";
   const p = core.performance || { mode: "announce" };
   if (mode === "none" || (mode === "auto" && p.mode === "none")) return NO_PERFORMANCE_FEE;
+  let text;
   if (mode === "tier" || (mode === "auto" && p.mode === "tier")) {
     const b1 = num(manual.b1 || p.b1);
     const b2 = num(manual.b2 || p.b2);
     const r1 = num(manual.r1 || p.r1);
     const r2 = num(manual.r2 || p.r2);
-    if (!b1 || !b2 || !r1 || !r2) return "业绩报酬为阶梯计提。合同未写明两档基准，请在下方填写两个计提基准和两个提取比例。业绩报酬计提基准以管理人公告为准。";
-    return withPerformanceNote(`当年化收益率≤${b1}%时，不提取；当${b1}%＜年化收益率≤${b2}%时，对年化收益率大于${b1}%且不高于${b2}%的收益部分提取${r1}%比例的业绩报酬；当年化收益率＞${b2}%时，对年化收益率高于${b2}%的收益部分提取${r2}%的业绩报酬，及对年化收益率大于${b1}%且不高于${b2}%的收益部分提取${r1}%的业绩报酬。`);
+    text = !b1 || !b2 || !r1 || !r2
+      ? "业绩报酬为阶梯计提。合同未写明两档基准，请在下方填写两个计提基准和两个提取比例。业绩报酬计提基准以管理人公告为准。"
+      : withPerformanceNote(`当年化收益率≤${b1}%时，不提取；当${b1}%＜年化收益率≤${b2}%时，对年化收益率大于${b1}%且不高于${b2}%的收益部分提取${r1}%比例的业绩报酬；当年化收益率＞${b2}%时，对年化收益率高于${b2}%的收益部分提取${r2}%的业绩报酬，及对年化收益率大于${b1}%且不高于${b2}%的收益部分提取${r1}%的业绩报酬。`);
+  } else {
+    const benchmark = num(manual.b1 || p.benchmark);
+    const ratio = num(manual.r1 || p.ratio);
+    if (benchmark && ratio) text = withPerformanceNote(`本集合计划对年化收益超过${benchmark}%的部分提取${ratio}%的业绩报酬。`);
+    else if (ratio) text = withPerformanceNote(`本集合计划对投资者每笔份额的持有期年化收益率超过业绩报酬计提基准的部分提取${ratio}%的业绩报酬。\n业绩报酬计提基准以管理人公告为准。`);
+    else text = withPerformanceNote("业绩报酬计提基准以管理人公告为准。");
   }
-  const benchmark = num(manual.b1 || p.benchmark);
-  const ratio = num(manual.r1 || p.ratio);
-  if (benchmark && ratio) {
-    return withPerformanceNote(`本集合计划对年化收益超过${benchmark}%的部分提取${ratio}%的业绩报酬。`);
-  }
-  if (ratio) {
-    return withPerformanceNote(`本集合计划对投资者每笔份额的持有期年化收益率超过业绩报酬计提基准的部分提取${ratio}%的业绩报酬。\n业绩报酬计提基准以管理人公告为准。`);
-  }
-  return withPerformanceNote("业绩报酬计提基准以管理人公告为准。");
+  return withPerformanceStandard(text);
 }
 
 function riskText(core, channel, salesCode) {
