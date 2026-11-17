@@ -79,9 +79,16 @@ function withPerformanceNote(text) {
 }
 
 function withPerformanceStandard(text) {
-  const body = String(text || "").trim();
-  if (!body || body === NO_PERFORMANCE_FEE || body.includes("业绩报酬计提标准为：")) return body;
-  return `${body}\n${PERFORMANCE_FEE_STANDARD}`;
+  let body = String(text || "").trim();
+  if (!body || body === NO_PERFORMANCE_FEE) return body;
+  if (!body.includes("业绩报酬计提日为计划分红登记日")) body = withPerformanceNote(body);
+  if (body.includes("1）当R≤R1时")) return body;
+  const note = PERFORMANCE_FEE_NOTE;
+  if (body.endsWith(note)) {
+    const head = body.slice(0, -note.length).trim();
+    return [PERFORMANCE_FEE_STANDARD, head, note].filter(Boolean).join("\n");
+  }
+  return `${PERFORMANCE_FEE_STANDARD}\n${body}`;
 }
 
 function performanceText(core, manual) {
