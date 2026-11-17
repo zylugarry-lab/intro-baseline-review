@@ -7,7 +7,7 @@ import { refreshBiography, tenureYears } from '../src/years.js';
 import { downloadName, readDocxParagraphs, reviewOnePager } from '../src/review.js';
 import { textDiff } from '../src/diff.js';
 import { applyParagraphEdits } from '../src/revise.js';
-import { collectParagraphs, parseXml } from '../src/xml.js';
+import { collectParagraphs, parseXml, visibleText } from '../src/xml.js';
 import { planRiskEdits, parseRiskStatement } from '../src/risk.js';
 import { composeElements, contractManagerNames, extractCore } from '../src/elements.js';
 import { planCoverNameEdits, planElementEdits, planProductCodeEdits } from '../src/element-review.js';
@@ -67,8 +67,8 @@ const tinyDoc = parseXml(tiny);
 const tinyParagraph = collectParagraphs(tinyDoc, 'word/document.xml')[0];
 applyParagraphEdits(tinyParagraph.node, [{ start: 0, before: '8', after: '9' }], { author: '介绍底稿', date: '2026-11-10T00:00:00Z', next: (() => { let n = 0; return () => { n += 1; return n; }; })() });
 const tinyXml = new XMLSerializer().serializeToString(tinyDoc);
-check(tinyXml.includes('w:del') && tinyXml.includes('w:delText') && tinyXml.includes('>8<'), '年限修改写成删除');
-check(tinyXml.includes('w:ins') && tinyXml.includes('>9<'), '年限修改写成插入');
+check(tinyXml.includes('>9<') && !tinyXml.includes('w:ins') && !tinyXml.includes('w:del'), '年限修改直接写进正文');
+check(visibleText(tinyParagraph.node) === '9年证券从业经验，1年投资经验。', '打开后看到的是改后的年限');
 
 mkdirSync(new URL('tests/output/', root), { recursive: true });
 const onePagers = [
@@ -86,10 +86,8 @@ for (const variant of ['general', 'ccb']) {
     if (!result.changed) continue;
     const outputName = `tests/output/${variant}-${fileName.replace(/[【】\s]/g, '')}`;
     writeFileSync(new URL(outputName, root), result.bytes);
-    const xml = await JSZip.loadAsync(result.bytes).then(zip => zip.file('word/document.xml').async('string'));
-    check(xml.includes('w:ins') && xml.includes('w:del'), `${variant} ${fileName} 含有修订标记`);
     const again = await visibleParagraphs(result.bytes);
-    check(again.some(paragraph => paragraph.text.includes('国泰海通')), `${variant} ${fileName} 修订后仍能读出正文`);
+    check(again.some(paragraph => paragraph.text.includes('国泰海通')), `${variant} ${fileName} 打开后能读到改好的正文`);
   }
 }
 
@@ -97,10 +95,9 @@ const fofCcb = await reviewOnePager({
   bytes: read(onePagers[0]), fileName: onePagers[0], variant: 'ccb', records: managers.records, asOf: AS_OF,
   companyBytes: read('assets/company-introduction-ccb.docx'),
 });
-const fofXml = await JSZip.loadAsync(fofCcb.bytes).then(zip => zip.file('word/document.xml').async('string'));
-check(fofXml.includes('全面领先') && fofXml.includes('delText'), '建行版比对把“全面领先”标成删除');
-const wang = refreshBiography(byName('王宜峰'), AS_OF);
 const fofParagraphs = await visibleParagraphs(fofCcb.bytes);
+check(!fofParagraphs.some(paragraph => paragraph.text.includes('全面领先')), '建行版比对后正文不再保留“全面领先”');
+const wang = refreshBiography(byName('王宜峰'), AS_OF);
 check(fofParagraphs.some(paragraph => paragraph.text.includes(wang.text.split('\n')[0].slice(0, 12))), '王宜峰简介已按底稿改写');
 check(fofCcb.companyLabels.includes('股东介绍'), '未改底稿时，建行版会改一页通里的股东介绍');
 
@@ -157,9 +154,10 @@ const riskRun = await reviewOnePager({
 });
 check(riskRun.riskUpdated, '一页通风险揭示被改写');
 const riskParagraphs = await visibleParagraphs(riskRun.bytes);
-check(riskParagraphs.some(paragraph => paragraph.text.includes('评定为R2（中低风险）') && paragraph.text.includes('该产品销售机构风险评级为R3（中风险）')), '修订稿里的风险揭示已换成要素等级');
 const riskXml = await JSZip.loadAsync(riskRun.bytes).then(zip => zip.file('word/document.xml').async('string'));
-check(riskXml.includes('w:del') && riskXml.includes('w:ins'), '风险修改保留修订标记');
+check(riskParagraphs.some(paragraph => paragraph.text.includes('评定为R2（中低风险）') && paragraph.text.includes('该产品销售机构风险评级为R3（中风险）')), '打开后风险揭示已换成要素等级');
+const riskPlain = riskXml.replace(/<w:ins\b[\s\S]*?<\/w:ins>/g, '').replace(/<w:del\b[\s\S]*?<\/w:del>/g, '');
+check(riskPlain.includes('评定为R2（中低风险）') && riskPlain.includes('该产品销售机构风险评级为R3（中风险）'), '风险修改直接写进正文');
 
 const elementBook = await buildElementWorkbook([['产品名称', '君享测试'], ['产品风险等级', 'R2（中低风险）\n该产品销售机构风险评级为R3（中风险）。']]);
 const elementZip = await JSZip.loadAsync(elementBook);

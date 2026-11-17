@@ -25,13 +25,6 @@ function element(doc, name) {
   return doc.createElementNS(NS.w, `w:${name}`);
 }
 
-function stamp(node, meta) {
-  node.setAttributeNS(NS.w, 'w:id', String(meta.next()));
-  node.setAttributeNS(NS.w, 'w:author', meta.author);
-  node.setAttributeNS(NS.w, 'w:date', meta.date);
-  return node;
-}
-
 function preserveSpace(node, text) {
   if (/^\s|\s$/.test(text) || text === '') node.setAttributeNS(NS.xml, 'xml:space', 'preserve');
 }
@@ -96,16 +89,6 @@ function isolateText(textNode) {
   return run;
 }
 
-function toDeletedText(node) {
-  if (node.localName !== 't') return;
-  const deleted = node.ownerDocument.createElementNS(NS.w, 'w:delText');
-  const space = node.getAttributeNS?.(NS.xml, 'space') || node.getAttribute('xml:space');
-  if (space) deleted.setAttributeNS(NS.xml, 'xml:space', space);
-  else preserveSpace(deleted, node.textContent || '');
-  deleted.textContent = node.textContent || '';
-  node.parentNode.replaceChild(deleted, node);
-}
-
 function appendLiteral(run, text) {
   const doc = run.ownerDocument;
   const lines = String(text).split('\n');
@@ -119,17 +102,23 @@ function appendLiteral(run, text) {
   });
 }
 
-function makeInsertedRun(doc, sampleRun, text, meta) {
-  const inserted = stamp(element(doc, 'ins'), meta);
+function makeRun(doc, sampleRun, text) {
   const run = element(doc, 'r');
   const properties = sampleRun ? runProperties(sampleRun) : null;
   if (properties) run.appendChild(properties.cloneNode(true));
   appendLiteral(run, text);
-  inserted.appendChild(run);
-  return inserted;
+  return run;
 }
 
-function replaceWhole(paragraph, after, meta) {
+function removeTextNode(node) {
+  const run = ancestor(node, NS.w, 'r');
+  if (node.parentNode) node.parentNode.removeChild(node);
+  if (!run?.parentNode) return;
+  const leftover = childList(run).some(item => isElement(item) && item.localName !== 'rPr');
+  if (!leftover) run.parentNode.removeChild(run);
+}
+
+function replaceWhole(paragraph, after) {
   const doc = paragraph.ownerDocument;
   const runs = [];
   const visit = node => {
@@ -140,31 +129,10 @@ function replaceWhole(paragraph, after, meta) {
   };
   visit(paragraph);
   const sample = runs[0] || null;
-  if (runs.length) {
-    const deleted = stamp(element(doc, 'del'), meta);
-    runs[0].parentNode.insertBefore(deleted, runs[0]);
-    for (const run of runs) {
-      for (const node of nodeList(run.getElementsByTagNameNS(NS.w, 't'))) toDeletedText(node);
-      deleted.appendChild(run);
-    }
+  for (const run of runs) {
+    if (run.parentNode) run.parentNode.removeChild(run);
   }
-  if (after) paragraph.appendChild(makeInsertedRun(doc, sample, after, meta));
-  else markParagraphDeleted(paragraph, meta);
-}
-
-function markParagraphDeleted(paragraph, meta) {
-  const doc = paragraph.ownerDocument;
-  let properties = childList(paragraph).find(node => isElement(node) && node.localName === 'pPr');
-  if (!properties) {
-    properties = element(doc, 'pPr');
-    paragraph.insertBefore(properties, paragraph.firstChild);
-  }
-  let runPropertiesNode = childList(properties).find(node => isElement(node) && node.localName === 'rPr');
-  if (!runPropertiesNode) {
-    runPropertiesNode = element(doc, 'rPr');
-    properties.appendChild(runPropertiesNode);
-  }
-  runPropertiesNode.appendChild(stamp(element(doc, 'del'), meta));
+  if (after) paragraph.appendChild(makeRun(doc, sample, after));
 }
 
 function textSpans(paragraph) {
@@ -183,13 +151,13 @@ function replaceRange(paragraph, edit, meta) {
   const end = start + edit.before.length;
   if (text.slice(start, end) !== edit.before) throw new Error('修订位置和原文不一致，已停止写入。');
   if (edit.before.includes('\n') || edit.after.includes('\n') || items.some(item => item.type !== 'text')) {
-    replaceWhole(paragraph, text.slice(0, start) + edit.after + text.slice(end), meta);
+    replaceWhole(paragraph, text.slice(0, start) + edit.after + text.slice(end));
     return;
   }
   const doc = paragraph.ownerDocument;
   const sample = textSpans(paragraph)[0] ? ancestor(textSpans(paragraph)[0].node, NS.w, 'r') : null;
   if (!edit.before) {
-    const inserted = makeInsertedRun(doc, sample, edit.after, meta);
+    const inserted = makeRun(doc, sample, edit.after);
     const spans = textSpans(paragraph);
     const atStart = spans.find(span => span.start === start);
     const around = spans.find(span => span.start < start && start < span.end);
@@ -219,18 +187,13 @@ function replaceRange(paragraph, edit, meta) {
     selected.push(span.node);
   }
   if (selected.map(node => node.textContent || '').join('') !== edit.before) throw new Error('修订切分和原文不一致，已停止写入。');
-  const runs = [];
-  for (const node of selected) {
-    const run = isolateText(node);
-    if (run && !runs.includes(run)) runs.push(run);
+  if (edit.after) {
+    selected[0].textContent = edit.after;
+    preserveSpace(selected[0], edit.after);
+    for (const node of selected.slice(1)) removeTextNode(node);
+  } else {
+    for (const node of selected) removeTextNode(node);
   }
-  const deleted = stamp(element(doc, 'del'), meta);
-  runs[0].parentNode.insertBefore(deleted, runs[0]);
-  for (const run of runs) {
-    for (const node of childList(run)) if (isElement(node) && node.localName === 't') toDeletedText(node);
-    deleted.appendChild(run);
-  }
-  if (edit.after) deleted.parentNode.insertBefore(makeInsertedRun(doc, runs[0], edit.after, meta), deleted.nextSibling);
 }
 
 export function applyParagraphEdits(paragraph, edits, meta) {
@@ -247,29 +210,29 @@ export function applyParagraphEdits(paragraph, edits, meta) {
   // whole paragraph gets one deletion and one insertion.
   const structural = pieces(paragraph).some(item => item.type !== 'text') || /[\n\t]/.test(text);
   if (structural) {
-    replaceWhole(paragraph, text, meta);
+    replaceWhole(paragraph, text);
     return;
   }
   for (const edit of ordered) replaceRange(paragraph, edit, meta);
 }
 
-export function insertParagraphAfter(paragraph, text, meta) {
+export function insertParagraphAfter(paragraph, text) {
   const doc = paragraph.ownerDocument;
   const created = element(doc, 'p');
-  const properties = element(doc, 'pPr');
-  const runPropertiesNode = element(doc, 'rPr');
-  runPropertiesNode.appendChild(stamp(element(doc, 'ins'), meta));
-  properties.appendChild(runPropertiesNode);
-  created.appendChild(properties);
+  const properties = childList(paragraph).find(node => isElement(node) && node.localName === 'pPr');
+  if (properties) {
+    const copy = properties.cloneNode(true);
+    acceptRevisions(copy);
+    created.appendChild(copy);
+  }
   const sample = nodeList(paragraph.getElementsByTagNameNS(NS.w, 'r'))[0] || null;
-  created.appendChild(makeInsertedRun(doc, sample, text, meta));
+  if (text) created.appendChild(makeRun(doc, sample, text));
   paragraph.parentNode.insertBefore(created, paragraph.nextSibling);
   return created;
 }
 
-export function deleteParagraph(paragraph, meta) {
-  acceptRevisions(paragraph);
-  replaceWhole(paragraph, '', meta);
+export function deleteParagraph(paragraph) {
+  if (paragraph.parentNode) paragraph.parentNode.removeChild(paragraph);
 }
 
 export function maxRevisionId(docs) {

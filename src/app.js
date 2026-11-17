@@ -1,7 +1,7 @@
 import { companySections, selectVariant, COMPANY_LABELS } from './company.js';
 import { composeElements, extractCore } from './elements.js?v=32';
 import { buildElementWorkbook, buildManagerWorkbook, parseManagerWorkbook } from './excel.js';
-import { downloadName, readDocxParagraphs, reviewOnePager } from './review.js?v=32';
+import { downloadName, readDocxParagraphs, reviewOnePager } from './review.js?v=33';
 import { applySalesRating } from './risk.js';
 import { binaryDocText, wordKind } from './word.js';
 import { readStored, removeStored, writeStored } from './store.js';
@@ -671,18 +671,18 @@ function renderResults(results) {
       <div><span>经理简介已改</span><strong>${managers}</strong></div>
       <div><span>产品要素已改</span><strong>${elementsChanged}</strong></div>
     </div>
-    ${changed > 1 ? '<button id="download-zip" class="secondary" type="button">打包下载全部修订稿</button>' : ''}
+    ${changed > 1 ? '<button id="download-zip" class="secondary" type="button">打包下载全部一页通</button>' : ''}
     ${results.map((item, index) => `
       <article class="result">
         <h3>${escapeHtml(item.fileName)}</h3>
-        <p>${item.changed ? `写了 ${item.changeCount} 处修订。` : '介绍、产品要素和风险揭示已经一致，原文件没有改。'}
+        <p>${item.changed ? `写了 ${item.changeCount} 处修改。` : '介绍、产品要素和风险揭示已经一致，原文件没有改。'}
           ${item.companyLabels.length ? `公司介绍改动：${escapeHtml(item.companyLabels.join('、'))}。` : ''}
           ${item.elementLabels?.length ? `产品要素改动：${escapeHtml(item.elementLabels.join('、'))}。` : ''}
           ${item.riskUpdated ? '风险揭示已按要素表修改。' : ''}
           ${item.lockUpdated ? '锁定期天数已按要素表修改。' : ''}</p>
         ${item.managers.map(manager => `<p><span class="badge ${manager.status}">${manager.status === 'updated' ? '已修改' : manager.status === 'inserted' ? '已补入' : manager.status === 'removed' ? '已删除' : '一致'}</span>${escapeHtml(manager.name)} ${(manager.calculations || []).map(calc => `${calc.label} ${calc.years}`).join(' · ')}</p>${manager.status === 'unchanged' ? '' : `<div class="diff"><del>${escapeHtml(manager.before || '（空）')}</del>\n<ins>${escapeHtml(manager.after || '（已删除）')}</ins></div>`}`).join('')}
         ${item.warnings.map(warning => `<p class="warn">${escapeHtml(warning)}</p>`).join('')}
-        ${item.changed ? `<button class="primary" type="button" data-download="${index}">下载修订稿</button>` : ''}
+        ${item.changed ? `<button class="primary" type="button" data-download="${index}">下载一页通</button>` : ''}
       </article>
     `).join('')}
   `;
@@ -738,7 +738,7 @@ async function runReview() {
       }
     }
     renderResults(results);
-    $('compare-hint').textContent = '核对完成。下载的 docx 用 Word 打开即可看到修订。';
+    $('compare-hint').textContent = '核对完成。下载的 docx 打开就能看到改好的正文。';
   } catch (error) {
     $('run-error').hidden = false;
     $('run-error').textContent = error.message || '核对失败。';
