@@ -43,7 +43,8 @@ function explicitName(value) {
 }
 
 function atom(paragraph, key, start, text) {
-  return { key, text, start, paragraphId: paragraph.id };
+  const punct = paragraph.text.slice(start + text.length).match(/^[，,。；;]+/);
+  return { key, text: punct ? text + punct[0] : text, start, paragraphId: paragraph.id };
 }
 
 function companyAtoms(paragraph, role = 'company') {

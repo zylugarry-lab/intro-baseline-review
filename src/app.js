@@ -1,4 +1,4 @@
-import { companySections, selectVariant, COMPANY_LABELS } from './company.js';
+import { companySections, selectVariant, COMPANY_LABELS } from './company.js?v=37';
 import { composeElements, extractCore } from './elements.js?v=36';
 import { buildElementWorkbook, buildManagerWorkbook, parseManagerWorkbook } from './excel.js';
 import { downloadName, readDocxParagraphs, reviewOnePager } from './review.js?v=33';
@@ -10,8 +10,8 @@ import { buildPoster, posterFileName } from './poster.js?v=32';
 
 const defaults = {
   managers: { url: './assets/manager-introductions.xlsx', name: '投资经理介绍.xlsx' },
-  general: { url: './assets/company-introduction-general.docx', name: '公司介绍-通用版.docx' },
-  ccb: { url: './assets/company-introduction-ccb.docx', name: '公司介绍-建行版.docx' },
+  general: { url: './assets/company-introduction-general.docx?v=37', name: '公司介绍-通用版.docx' },
+  ccb: { url: './assets/company-introduction-ccb.docx?v=37', name: '公司介绍-建行版.docx' },
 };
 const DRAFT_KEY = 'draft';
 const RECORD_FIELDS = ['id', 'name', 'biography', 'note', 'workStart', 'investmentStart'];

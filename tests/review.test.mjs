@@ -60,6 +60,9 @@ const ccbText = companySections(selectVariant(ccb, 'ccb')).flatMap(section => se
 check(generalText.includes('全面领先') && generalText.includes('资本实力位居行业最前列'), '通用版保留全面领先和资本实力');
 check(!ccbText.includes('全面领先') && !ccbText.includes('资本实力位居行业最前列'), '建行版去掉全面领先和资本实力');
 check(textDiff('长期、持续、全面领先的综合金融服务商', '长期、持续的综合金融服务商')[0].before === '、全面领先', '股东介绍只标出不同的词');
+for (const [label, text] of [['通用版', generalText], ['建行版', ccbText]]) {
+  check(text.includes('注册资本20亿元，') && text.includes('首批券商资产管理子公司。') && text.includes('专业的投研团队，') && text.includes('全面的产品体系。') && text.includes('荣获71座业内权威奖项“金牛奖”。') && text.includes('公司资产管理规模超8800亿元。'), `${label}公司介绍补上逗号和句号`);
+}
 
 const tiny = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>8年证券从业经验，1年投资经验。</w:t></w:r></w:p></w:body></w:document>`;
