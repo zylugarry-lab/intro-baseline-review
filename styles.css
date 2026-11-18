@@ -81,7 +81,8 @@ select, .search {
 .detail { margin-top: 16px; padding: 4px 4px 8px; }
 .detail .company-columns { grid-template-columns: 1fr 1fr; }
 .tag { display: inline-block; margin-top: 8px; font-size: 11px; color: var(--deep); background: #e7f0f8; border-radius: 99px; padding: 2px 8px; }
-.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+.sync-note { flex-basis: 100%; color: var(--muted); font-size: 12px; }
 .file-button, .secondary, .primary, .text-button { border-radius: 5px; }
 .file-button, .primary { background: var(--blue); color: white; border: 1px solid var(--blue); padding: 8px 14px; }
 .secondary, .text-button { background: white; color: var(--blue); border: 1px solid #b9cddd; padding: 7px 12px; }

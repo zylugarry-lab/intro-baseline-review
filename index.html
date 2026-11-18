@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>要素与介绍核对</title>
-  <link rel="stylesheet" href="./styles.css?v=28">
+  <link rel="stylesheet" href="./styles.css?v=29">
 </head>
 <body>
   <header class="topbar">
@@ -12,7 +12,7 @@
       <div class="brand-mark">介</div>
       <div>要素与介绍核对<small>MATERIAL REVIEW</small></div>
     </div>
-    <div class="local"><i></i>只在本机浏览器处理，不会上传</div>
+    <div class="local"><i></i>合同和一页通只在本机处理</div>
   </header>
   <main>
     <section class="intro">
@@ -72,7 +72,7 @@
       <div class="version-row">
         <div>
           <h2>第二步 · 内容底稿</h2>
-          <p class="lede">先只显示这三张卡片。点开一张，这一块在下面整页展开。年限按制作日期自动重算，改动保存在这台浏览器里。</p>
+          <p class="lede">先只显示这三张卡片。点开一张，这一块在下面整页展开。年限按制作日期自动重算。改完要点「保存并同步」，其他人打开这个网页会看到这一版。</p>
         </div>
         <div>
           <label for="variant">比对用的公司介绍</label>
@@ -90,8 +90,10 @@
             <span class="chevron">展开</span>
           </button>
           <div class="actions">
+            <button id="save-managers" class="primary" type="button">保存并同步</button>
             <button id="download-managers" class="secondary" type="button">下载当前 Excel</button>
             <button id="reset-managers" class="text-button" type="button">恢复内置</button>
+            <span id="sync-managers" class="sync-note">正在读取…</span>
           </div>
         </article>
         <article class="card" id="card-general">
@@ -100,8 +102,10 @@
             <span class="chevron">展开</span>
           </button>
           <div class="actions">
+            <button id="save-general" class="primary" type="button">保存并同步</button>
             <button id="download-general" class="secondary" type="button">下载当前文本</button>
             <button id="reset-general" class="text-button" type="button">恢复内置</button>
+            <span id="sync-general" class="sync-note">正在读取…</span>
           </div>
         </article>
         <article class="card" id="card-ccb">
@@ -110,8 +114,10 @@
             <span class="chevron">展开</span>
           </button>
           <div class="actions">
+            <button id="save-ccb" class="primary" type="button">保存并同步</button>
             <button id="download-ccb" class="secondary" type="button">下载当前文本</button>
             <button id="reset-ccb" class="text-button" type="button">恢复内置</button>
+            <span id="sync-ccb" class="sync-note">正在读取…</span>
           </div>
         </article>
       </div>
@@ -163,6 +169,6 @@
     <span>建行版不写“全面领先”和“资本实力位居行业最前列”。</span>
   </footer>
   <script src="./vendor/jszip.min.js"></script>
-  <script type="module" src="./src/app.js?v=37"></script>
+  <script type="module" src="./src/app.js?v=38"></script>
 </body>
 </html>

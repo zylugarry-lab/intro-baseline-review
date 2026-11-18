@@ -13,6 +13,7 @@ import { composeElements, contractManagerNames, extractCore } from '../src/eleme
 import { planCoverNameEdits, planElementEdits, planProductCodeEdits } from '../src/element-review.js';
 import { planManagerEdits } from '../src/managers.js';
 import { planLockEdits } from '../src/lock.js';
+import { parseSharedBody, withLibrary } from '../src/sync.js';
 import { buildPoster, posterCopy, posterFileName, posterLayout, wrapTitle } from '../src/poster.js';
 import { binaryDocText, wordKind } from '../src/word.js';
 
@@ -60,6 +61,10 @@ const ccbText = companySections(selectVariant(ccb, 'ccb')).flatMap(section => se
 check(generalText.includes('全面领先') && generalText.includes('资本实力位居行业最前列'), '通用版保留全面领先和资本实力');
 check(!ccbText.includes('全面领先') && !ccbText.includes('资本实力位居行业最前列'), '建行版去掉全面领先和资本实力');
 check(textDiff('长期、持续、全面领先的综合金融服务商', '长期、持续的综合金融服务商')[0].before === '、全面领先', '股东介绍只标出不同的词');
+const sharedBody = parseSharedBody('{"kind":"intro-baseline-libraries","libraries":{"general":{"savedAt":"2026-11-18T02:00:00Z"}}}<!doctype html><html>');
+check(sharedBody.libraries.general.savedAt === '2026-11-18T02:00:00Z', '同步内容能从接口原文里读出来');
+const mergedLibraries = withLibrary(sharedBody, 'managers', { savedAt: '2026-11-18T03:00:00Z', records: [] });
+check(mergedLibraries.libraries.general.savedAt === '2026-11-18T02:00:00Z' && mergedLibraries.libraries.managers.records.length === 0, '保存一份底稿不会冲掉另一份');
 for (const [label, text] of [['通用版', generalText], ['建行版', ccbText]]) {
   check(text.includes('注册资本20亿元，') && text.includes('首批券商资产管理子公司。') && text.includes('专业的投研团队，') && text.includes('全面的产品体系。') && text.includes('荣获71座业内权威奖项“金牛奖”。') && text.includes('公司资产管理规模超8800亿元。'), `${label}公司介绍补上逗号和句号`);
 }

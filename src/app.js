@@ -7,6 +7,7 @@ import { binaryDocText, wordKind } from './word.js';
 import { readStored, removeStored, writeStored } from './store.js';
 import { refreshBiography, shanghaiToday } from './years.js';
 import { buildPoster, posterFileName } from './poster.js?v=32';
+import { parseSharedBody, readShared, withLibrary, writeShared } from './sync.js?v=38';
 
 const defaults = {
   managers: { url: './assets/manager-introductions.xlsx', name: '投资经理介绍.xlsx' },
@@ -37,6 +38,8 @@ const state = {
   manual: { code: '', salesCode: '' },
   nameTouched: false,
   riskTouched: false,
+  touchAt: { managers: 0, general: 0, ccb: 0 },
+  sharedAt: { managers: '', general: '', ccb: '' },
 };
 
 const $ = id => document.getElementById(id);
@@ -82,6 +85,24 @@ function normalizeRecord(record, index) {
   };
 }
 
+const LIBRARY_NAMES = { managers: '经理介绍', general: '通用版公司介绍', ccb: '建行版公司介绍' };
+const LIBRARY_KEYS = ['managers', 'general', 'ccb'];
+
+function stamp(value) {
+  if (typeof value === 'number') return value;
+  const parsed = Date.parse(value || '');
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function libraryDirty(key) {
+  return (state.touchAt[key] || 0) > stamp(state.sharedAt[key]);
+}
+
+function markDirty(key) {
+  state.touchAt[key] = Date.now();
+  scheduleSave();
+}
+
 function recordKey(record) {
   return RECORD_FIELDS.map(field => record[field] || '').join('\u0001');
 }
@@ -123,6 +144,8 @@ function elementPayload() {
 
 async function loadDraft() {
   const stored = await readStored(DRAFT_KEY).catch(() => null);
+  const touchAt = { managers: 0, general: 0, ccb: 0, ...(stored?.touchAt || {}) };
+  const sharedAt = { managers: '', general: '', ccb: '', ...(stored?.sharedAt || {}) };
   return {
     company: {
       general: stored?.company?.general || {},
@@ -130,6 +153,8 @@ async function loadDraft() {
     },
     records: Array.isArray(stored?.records) ? stored.records.map(normalizeRecord) : null,
     elements: stored?.elements || null,
+    touchAt,
+    sharedAt,
   };
 }
 
@@ -153,6 +178,32 @@ function meta() {
     const count = Object.keys(companyDiff(variant)).length;
     $(`${variant}-meta`).textContent = count ? `网页上修改 · ${count} 段` : '内置底稿';
   }
+  for (const key of LIBRARY_KEYS) {
+    const note = $(`sync-${key}`);
+    if (!note) continue;
+    const sharedAt = stamp(state.sharedAt[key]);
+    if (libraryDirty(key)) note.textContent = '有修改，尚未同步';
+    else if (sharedAt) note.textContent = `已同步 ${syncClock(sharedAt)}`;
+    else note.textContent = '尚未同步';
+  }
+}
+
+function syncClock(millis) {
+  return new Date(millis).toLocaleString('zh-CN', {
+    timeZone: 'Asia/Shanghai',
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
+function draftStatus() {
+  const dirty = LIBRARY_KEYS.filter(libraryDirty);
+  if (dirty.length) return `${dirty.map(key => LIBRARY_NAMES[key]).join('、')}有修改，点保存并同步后其他人才能看到。`;
+  if (LIBRARY_KEYS.some(key => state.sharedAt[key])) return '已读到最近一次同步的底稿。';
+  return '和内置底稿一致。点保存并同步后，其他人打开网页也能看到。';
 }
 
 function saveStatus(text) {
@@ -164,12 +215,15 @@ async function persistDraft() {
     company: { general: companyDiff('general'), ccb: companyDiff('ccb') },
     records: recordsDiffer() ? state.records.map(cloneRecord) : null,
     elements: elementPayload(),
+    touchAt: state.touchAt,
+    sharedAt: state.sharedAt,
   };
-  const untouched = !draft.records && !draft.elements && !Object.keys(draft.company.general).length && !Object.keys(draft.company.ccb).length;
+  const dirty = LIBRARY_KEYS.some(key => state.touchAt[key]);
+  const untouched = !dirty && !draft.records && !draft.elements && !Object.keys(draft.company.general).length && !Object.keys(draft.company.ccb).length;
   if (untouched) await removeStored(DRAFT_KEY);
   else await writeStored(DRAFT_KEY, draft);
   meta();
-  saveStatus(untouched ? '和内置底稿一致。' : '已保存在这台浏览器。');
+  saveStatus(draftStatus());
 }
 
 function scheduleSave() {
@@ -209,6 +263,93 @@ function atomsOf(variant) {
   return atoms;
 }
 
+function companySnapshot(variant) {
+  const sections = state.company[variant] || [];
+  return {
+    clauses: sections.flatMap(section => section.columns.flatMap(column => column.entries.map(entry => ({ key: entry.key, text: entry.text })))),
+    notes: sections.flatMap(section => section.notes.map(note => note.text)),
+  };
+}
+
+function applyCompanySnapshot(variant, library) {
+  const sections = state.company[variant] || [];
+  const entries = sections.flatMap(section => section.columns.flatMap(column => column.entries));
+  const notes = sections.flatMap(section => section.notes);
+  const clauses = Array.isArray(library?.clauses) ? library.clauses : null;
+  const noteTexts = Array.isArray(library?.notes) ? library.notes : null;
+  if (!clauses || !noteTexts || clauses.length !== entries.length || noteTexts.length !== notes.length) return false;
+  if (clauses.some((item, index) => item?.key !== entries[index].key)) return false;
+  clauses.forEach((item, index) => {
+    if (item.text !== entries[index].text) spliceClause(variant, entries[index], String(item.text ?? ''));
+  });
+  noteTexts.forEach((text, index) => {
+    if (text === notes[index].text) return;
+    const paragraph = state.companyParagraphs[variant].find(item => item.id === notes[index].paragraphId);
+    if (paragraph) paragraph.text = String(text ?? '');
+  });
+  state.company[variant] = companySections(selectVariant(state.companyParagraphs[variant], variant));
+  return true;
+}
+
+async function pullShared() {
+  let shared;
+  try {
+    shared = await readShared();
+  } catch {
+    saveStatus('暂时读不到已同步的底稿，先用这台浏览器里的版本。');
+    return;
+  }
+  const replaced = [];
+  for (const key of LIBRARY_KEYS) {
+    const library = shared.libraries?.[key];
+    if (!library?.savedAt) continue;
+    const sharedAt = stamp(library.savedAt);
+    const localAt = state.touchAt[key] || 0;
+    state.sharedAt[key] = library.savedAt;
+    if (localAt > sharedAt) continue;
+    const hadLocalEdits = localAt > 0;
+    const applied = key === 'managers'
+      ? Array.isArray(library.records)
+      : applyCompanySnapshot(key, library);
+    if (!applied) continue;
+    if (key === 'managers') state.records = library.records.map(normalizeRecord);
+    state.touchAt[key] = 0;
+    if (hadLocalEdits) replaced.push(LIBRARY_NAMES[key]);
+  }
+  renderCompany('general');
+  renderCompany('ccb');
+  renderManagers();
+  await persistDraft();
+  if (replaced.length) saveStatus(`已改用同事同步的${replaced.join('、')}。本机还没保存的修改被换掉了。`);
+}
+
+async function saveShared(key) {
+  const button = $(`save-${key}`);
+  button.disabled = true;
+  saveStatus(`正在同步${LIBRARY_NAMES[key]}…`);
+  try {
+    const current = await readShared().catch(() => ({ libraries: {} }));
+    const savedAt = new Date().toISOString();
+    const library = key === 'managers'
+      ? { savedAt, records: state.records.map(cloneRecord) }
+      : { savedAt, ...companySnapshot(key) };
+    await writeShared(withLibrary(current, key, library));
+    const confirmed = await readShared().catch(() => null);
+    if (confirmed && confirmed.libraries?.[key]?.savedAt !== savedAt) {
+      await writeShared(withLibrary(confirmed, key, library));
+    }
+    state.sharedAt[key] = savedAt;
+    state.touchAt[key] = 0;
+    await persistDraft();
+    saveStatus(`${LIBRARY_NAMES[key]}已同步。其他人打开这个网页就能看到。`);
+  } catch (error) {
+    saveStatus(error.message || '同步失败。这一版先留在这台浏览器。');
+  } finally {
+    button.disabled = false;
+    meta();
+  }
+}
+
 function spliceClause(variant, entry, nextText) {
   const paragraph = state.companyParagraphs[variant].find(item => item.id === entry.paragraphId);
   if (!paragraph) return;
@@ -232,6 +373,8 @@ async function reload() {
     state.parsedRecords = parsed.records.map(cloneRecord);
     state.records = draft.records ? draft.records.map(cloneRecord) : state.parsedRecords.map(cloneRecord);
     state.warnings = parsed.warnings;
+    state.touchAt = draft.touchAt;
+    state.sharedAt = draft.sharedAt;
     for (const variant of ['general', 'ccb']) {
       const paragraphs = await readDocxParagraphs(state.files[variant].bytes);
       state.companyBase[variant] = Object.fromEntries(paragraphs.map(paragraph => [paragraph.id, paragraph.text]));
@@ -242,11 +385,10 @@ async function reload() {
       state.company[variant] = companySections(selectVariant(paragraphs, variant));
     }
     meta();
-    const edited = recordsDiffer() || Object.keys(companyDiff('general')).length || Object.keys(companyDiff('ccb')).length;
-    saveStatus(edited || draft.elements ? '已载入这台浏览器里保存的修改。' : '和内置底稿一致。点一张卡片展开。');
     renderCompany('general');
     renderCompany('ccb');
     renderManagers();
+    await pullShared();
     applyOpenCard();
   } catch (error) {
     $('baseline-error').hidden = false;
@@ -769,7 +911,7 @@ function onManagerEdit(target) {
     const area = card.querySelector('[data-field="biography"]');
     if (area && document.activeElement !== area) area.value = safeRefresh(record).text;
   }
-  scheduleSave();
+  markDirty('managers');
 }
 
 async function resetCompany(variant) {
@@ -779,13 +921,13 @@ async function resetCompany(variant) {
   for (const paragraph of state.companyParagraphs[variant]) paragraph.text = state.companyBase[variant][paragraph.id];
   state.company[variant] = companySections(selectVariant(state.companyParagraphs[variant], variant));
   renderCompany(variant);
-  await persistDraft();
+  markDirty(variant);
 }
 
 async function resetManagers() {
   state.records = state.parsedRecords.map(cloneRecord);
   renderManagers();
-  await persistDraft();
+  markDirty('managers');
 }
 
 function bind() {
@@ -836,7 +978,7 @@ function bind() {
     $('manager-search').value = '';
     renderManagers();
     $('manager-preview').querySelector(`[data-id="${CSS.escape(record.id)}"] [data-field="name"]`)?.focus();
-    scheduleSave();
+    markDirty('managers');
   });
   $('baseline').addEventListener('input', event => {
     const panel = event.target.closest('[data-company-variant]');
@@ -851,7 +993,7 @@ function bind() {
       if (paragraph) paragraph.text = event.target.value;
       found.note.text = event.target.value;
     }
-    scheduleSave();
+    markDirty(variant);
   });
   $('manager-preview').addEventListener('input', event => onManagerEdit(event.target));
   $('manager-preview').addEventListener('change', event => {
@@ -862,11 +1004,12 @@ function bind() {
     if (!remove) return;
     state.records = state.records.filter(record => record.id !== remove.dataset.removeManager);
     renderManagers();
-    scheduleSave();
+    markDirty('managers');
   });
   $('reset-managers').addEventListener('click', resetManagers);
   $('reset-general').addEventListener('click', () => resetCompany('general'));
   $('reset-ccb').addEventListener('click', () => resetCompany('ccb'));
+  for (const key of LIBRARY_KEYS) $(`save-${key}`).addEventListener('click', () => saveShared(key));
   $('download-managers').addEventListener('click', async () => {
     const rows = preparedRecords().map(item => ({
       ...item.record,
