@@ -416,6 +416,13 @@ const editedPoster = posterCopy({
 check(editedPoster.name === '网页上改过的名称' && editedPoster.rows.some(row => row.label === '产品代码：' && row.value === 'ABC123') && editedPoster.rows.some(row => row.value === '网页上改过的业绩报酬。'), '海报采用网页上改过的产品名称、代码和业绩报酬');
 const posterCcb = posterCopy({ elements: posterRows, channel: 'ccb' });
 check(posterCcb.suitability.includes('C3（平衡型）') && posterCcb.suitability.includes('C5（激进型）') && !posterCcb.suitability.includes('C1'), '建行海报从对应等级写到 C5');
+const ccbFormat = posterCopy({ elements: posterRows, format: 'ccb', code: '953794 953588', date: '2026/11/23 起 正式开放', window: '2026/11/23-2026/11/27：11/23-11/24开放参与和退出' });
+check(ccbFormat.riskLine === 'R3（中风险）' && ccbFormat.rows.some(row => row.label === '开放规则：' && row.value.includes('5个工作日')) && ccbFormat.rows.some(row => row.label === '开放期：') && !ccbFormat.rows.some(row => row.label.startsWith('产品费率')), '建行海报用风险代号、开放规则和开放期');
+check(ccbFormat.disclaimer.includes('委托人') && ccbFormat.disclaimer.includes('入市须谨慎') && ccbFormat.disclaimer.includes('建设银行') && ccbFormat.disclaimer.includes('C3-C5') && !ccbFormat.disclaimer.includes('C3（平衡型）'), '建行海报底部按持营版式写风险揭示');
+check(posterFileName(posterRows[0].value, AS_OF, 'ccb') === '【持营海报202611】国泰海通福星多元稳健19号.pptx', '建行海报文件名用持营海报');
+const ccbBytes = await buildPoster(read('assets/poster-template-ccb.pptx'), { elements: posterRows, format: 'ccb', code: '953794 953588', date: '2026/11/23 起 正式开放', window: '2026/11/23-2026/11/27' });
+const ccbXml = await JSZip.loadAsync(ccbBytes).then(zip => zip.file('ppt/slides/slide1.xml').async('string'));
+check(ccbXml.includes('国泰海通福星') && ccbXml.includes('R3（中风险）') && !ccbXml.includes('风险等级：') && ccbXml.includes('产品代码：953794 953588') && ccbXml.includes('2026/11/23 起 正式开放') && ccbXml.includes('开放规则：') && ccbXml.includes('建设银行') && !ccbXml.includes('2.05%'), '建行海报模板换成当前产品和开放安排');
 check(posterFileName(posterRows[0].value, AS_OF) === '【海报  202611】国泰海通福星多元稳健19号.pptx', '海报文件名用制作年月和合同简称');
 const posterBytes = await buildPoster(read('assets/poster-template.pptx'), { elements: posterRows, channel: 'house', code: '953794', date: '9月28日 正式开放' });
 const posterXml = await JSZip.loadAsync(posterBytes).then(zip => zip.file('ppt/slides/slide1.xml').async('string'));

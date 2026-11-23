@@ -155,9 +155,16 @@
 
     <section class="panel" id="poster">
       <h2>第四步 · 生成海报</h2>
-      <p class="lede">用网页上当前这份要素填进海报模板，包括你改过的产品名称、业绩报酬和其他格子。产品名称下面写风险等级大字。海报上适合投资者的句子收成简写，例如 R3 写成 C3-C5；建行版仍写 C3（平衡型）这种全称。开放日期或销售日期在这里填。产品代码用要素里的代码；老产品也可以在第一步的产品代码里填写。</p>
+      <p class="lede">用网页上当前这份要素填进海报模板，包括你改过的产品名称、业绩报酬和其他格子。通用海报在产品名称下面写「风险等级：R3（中风险）」。建行海报用持营版式：名称下直接写「R3（中风险）」，产品代码和「起正式开放」单独成框，正文写起购金额、业绩报酬、开放规则和开放期。产品代码用要素里的代码；老产品也可以在第一步的产品代码里填写。</p>
       <div class="element-tools">
+        <label>海报格式
+          <select id="poster-format">
+            <option value="house">通用海报</option>
+            <option value="ccb">建行海报</option>
+          </select>
+        </label>
         <label>开放/销售日期<input id="poster-date" type="text" autocomplete="off" placeholder="例如 9月28日 正式开放"></label>
+        <label id="poster-window-wrap" hidden>开放期<input id="poster-window" type="text" autocomplete="off" placeholder="例如 2026/11/23-2026/11/27：11/23-11/24开放参与和退出"></label>
         <button id="download-poster" class="primary" type="button" disabled>下载海报</button>
       </div>
       <p id="poster-hint" class="lede">先在第一步上传合同。</p>
@@ -169,6 +176,6 @@
     <span>建行版不写“全面领先”和“资本实力位居行业最前列”。</span>
   </footer>
   <script src="./vendor/jszip.min.js"></script>
-  <script type="module" src="./src/app.js?v=41"></script>
+  <script type="module" src="./src/app.js?v=42"></script>
 </body>
 </html>

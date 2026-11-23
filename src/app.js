@@ -6,7 +6,7 @@ import { applySalesRating } from './risk.js';
 import { binaryDocText, wordKind } from './word.js';
 import { readStored, removeStored, writeStored } from './store.js';
 import { refreshBiography, shanghaiToday } from './years.js';
-import { buildPoster, posterFileName } from './poster.js?v=32';
+import { buildPoster, posterFileName } from './poster.js?v=33';
 import { parseSharedBody, readShared, withLibrary, writeShared } from './sync.js?v=38';
 
 const defaults = {
@@ -20,6 +20,7 @@ const RECORD_FIELDS = ['id', 'name', 'biography', 'note', 'workStart', 'investme
 const state = {
   asOf: localStorage.getItem('intro-as-of') || shanghaiToday(),
   variant: localStorage.getItem('intro-variant') === 'ccb' ? 'ccb' : 'general',
+  posterFormat: localStorage.getItem('poster-format') === 'ccb' ? 'ccb' : 'house',
   files: {},
   parsedRecords: [],
   records: [],
@@ -138,6 +139,7 @@ function elementPayload() {
       riskTouched: contract.riskTouched,
       notes: contract.notes,
       posterDate: contract.posterDate || '',
+      posterWindow: contract.posterWindow || '',
     })),
   };
 }
@@ -668,6 +670,7 @@ function restoreElements(saved) {
     riskTouched: Boolean(contract.riskTouched),
     notes: Array.isArray(contract.notes) ? contract.notes : [],
     posterDate: contract.posterDate || '',
+    posterWindow: contract.posterWindow || '',
   }));
   const active = state.contracts.find(contract => contract.id === saved?.activeId) || state.contracts[0];
   if (active) activateContract(active.id);
@@ -705,6 +708,7 @@ async function readContracts(files) {
         riskTouched: false,
         notes: core.notes || [],
         posterDate: '',
+        posterWindow: '',
         rows: [],
       };
       contract.rows = composeElements(core, { ...contract.manual, channel: channel(), perfMode: 'auto' }).map(([label, value]) => ({ label, value }));
@@ -742,16 +746,28 @@ function addOnePagers(files) {
   renderOnePagers();
 }
 
+function posterFormat() {
+  return state.posterFormat === 'ccb' ? 'ccb' : 'house';
+}
+
 function renderPoster() {
   const button = $('download-poster');
   if (!button) return;
   const active = activeContract();
   const ready = Boolean(active?.rows?.length);
   button.disabled = !ready;
+  const format = $('poster-format');
+  if (format) format.value = posterFormat();
+  const ccb = posterFormat() === 'ccb';
   const date = $('poster-date');
   if (date && document.activeElement !== date) date.value = active?.posterDate || '';
+  if (date) date.placeholder = ccb ? '例如 2026/11/23 起 正式开放' : '例如 9月28日 正式开放';
+  const windowWrap = $('poster-window-wrap');
+  const windowInput = $('poster-window');
+  if (windowWrap) windowWrap.hidden = !ccb;
+  if (windowInput && document.activeElement !== windowInput) windowInput.value = active?.posterWindow || '';
   $('poster-hint').textContent = ready
-    ? `将用${state.variant === 'ccb' ? '建行版' : '通用版'}风险话术，按「${contractTitle(active)}」生成海报。`
+    ? `将用${ccb ? '建行海报' : '通用海报'}，按「${contractTitle(active)}」生成。`
     : '先在第一步上传合同。产品代码用上面填的那一格。';
 }
 
@@ -765,17 +781,20 @@ async function downloadPoster() {
     return;
   }
   try {
-    const response = await fetch('./assets/poster-template.pptx?v=29');
+    const format = posterFormat();
+    const response = await fetch(format === 'ccb' ? './assets/poster-template-ccb.pptx?v=1' : './assets/poster-template.pptx?v=29');
     if (!response.ok) throw new Error('海报模板没有读出来。');
     readLiveElements();
     const bytes = await buildPoster(new Uint8Array(await response.arrayBuffer()), {
       elements: active.rows,
       channel: channel(),
+      format,
       code: active.manual.code || '',
       date: active.posterDate || '',
+      window: active.posterWindow || '',
       salesCode: active.manual.salesCode || '',
     });
-    saveBlob(bytes, posterFileName(elementValue('产品名称'), state.asOf), 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    saveBlob(bytes, posterFileName(elementValue('产品名称'), state.asOf, format), 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
   } catch (failure) {
     error.hidden = false;
     error.textContent = failure.message || '海报没有生成。';
@@ -1115,9 +1134,19 @@ function bind() {
     renderPoster();
     scheduleSave();
   });
+  $('poster-format').addEventListener('change', () => {
+    state.posterFormat = $('poster-format').value === 'ccb' ? 'ccb' : 'house';
+    localStorage.setItem('poster-format', state.posterFormat);
+    renderPoster();
+  });
   $('poster-date').addEventListener('input', () => {
     const contract = activeContract();
     if (contract) contract.posterDate = $('poster-date').value;
+    scheduleSave();
+  });
+  $('poster-window').addEventListener('input', () => {
+    const contract = activeContract();
+    if (contract) contract.posterWindow = $('poster-window').value;
     scheduleSave();
   });
   $('download-poster').addEventListener('click', downloadPoster);

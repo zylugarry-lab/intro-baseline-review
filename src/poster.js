@@ -10,6 +10,12 @@ const DISCLAIMER_HEAD = [
   '3、管理人承诺以诚实信用、勤勉尽责的原则管理产品。产品的过往业绩和净值高低并不预示其未来业绩表现，管理人管理的其他产品的业绩也不构成对本产品业绩表现的保证。',
 ].join('');
 
+const DISCLAIMER_HEAD_CCB = [
+  '1、本资料仅为宣传材料，不作为任何法律文件，仅供合格投资者参考，不得通过任何渠道进行公开宣传，不得印刷宣传，包含的内容仅供参考，具体以本集合计划合同、说明书及风险揭示书等法律文本为准，文件未经允许不得转载或给第三方传阅。',
+  '2、本产品为非保本型产品，存在净值波动，投资风险由委托人自行承担，如需了解产品详情，请阅读产品资产管理合同、资产管理计划说明书等法律文件。投资有风险，入市须谨慎。',
+  '3、管理人承诺以诚实信用、勤勉尽责的原则管理产品。产品的过往业绩和净值高低并不预示其未来业绩表现，管理人管理的其他产品的业绩也不构成对本产品业绩表现的保证。',
+].join('');
+
 function flat(text) {
   return String(text || '').replace(/\s*\n+\s*/g, '').replace(/[ \t]{2,}/g, ' ').trim();
 }
@@ -79,37 +85,58 @@ function feeLine(participate, productFee) {
   return parts.join('；');
 }
 
-export function posterCopy({ elements, channel = 'house', code = '', date = '', salesCode = '' } = {}) {
+export function posterCopy({ elements, channel = 'house', format = 'house', code = '', date = '', window = '', salesCode = '' } = {}) {
   const rawName = field(elements, '产品名称');
   const name = productName(rawName);
   const resolvedCode = productCode(rawName) || String(code || '').trim();
   const risk = readPosterRisk(field(elements, '产品风险等级'));
-  const riskLine = risk.code
-    ? `风险等级：${risk.code}（${risk.word}）`
-    : (risk.word ? `风险等级：${risk.word}` : '');
-  const fit = suitability(risk.code, channel);
+  const riskPlain = risk.code ? `${risk.code}（${risk.word}）` : risk.word;
+  const riskLine = format === 'ccb'
+    ? riskPlain
+    : (risk.code ? `风险等级：${riskPlain}` : (risk.word ? `风险等级：${risk.word}` : ''));
+  const level = Number(String(risk.code || '').slice(1));
+  const fit = format === 'ccb'
+    ? (level ? `适合合格投资者中的专业投资者以及风险承受能力为C${level}-C5的普通投资者。` : '')
+    : suitability(risk.code, channel);
   const rows = [];
-  if (resolvedCode) rows.push({ label: '产品代码：', value: resolvedCode });
-  if (String(date || '').trim()) rows.push({ label: '开放/销售日期：', value: String(date).trim() });
-  rows.push(
-    { label: '起购金额：', value: flat(field(elements, '首参金额')) },
-    { label: '业绩报酬计提：', value: flat(field(elements, '业绩报酬')) },
-    { label: '开放期：', value: flat(field(elements, '开放期')) },
-    { label: '产品费率：', value: feeLine(field(elements, '参与/退出费率'), field(elements, '产品费率')) },
-  );
-  if (riskLine) rows.push({ label: riskLine, value: '' });
-  if (fit) rows.push({ label: '', value: fit });
-  const manager = flat(field(elements, '管理人')) || '上海国泰海通证券资产管理有限公司';
-  const distributor = channel === 'ccb'
-    ? '建设银行作为代销机构不承担产品的投资、兑付和风险管理责任。'
-    : '销售机构不承担产品的投资和兑付责任。';
-  let pointFive = '';
-  if (fit) {
-    pointFive = `5、${risk.code ? `管理人对于本集合计划的风险等级评定为${risk.code}，` : ''}${fit}`;
-    if (salesCode && RISK_WORD[salesCode]) pointFive += `该产品销售机构风险评级为${salesCode}（${RISK_WORD[salesCode]}）。`;
+  if (format === 'ccb') {
+    rows.push(
+      { label: '起购金额：', value: flat(field(elements, '首参金额')) },
+      { label: '业绩报酬计提：', value: flat(field(elements, '业绩报酬')) },
+      { label: '开放规则：', value: flat(field(elements, '开放期')) },
+    );
+    if (String(window || '').trim()) rows.push({ label: '开放期：', value: String(window).trim() });
+  } else {
+    if (resolvedCode) rows.push({ label: '产品代码：', value: resolvedCode });
+    if (String(date || '').trim()) rows.push({ label: '开放/销售日期：', value: String(date).trim() });
+    rows.push(
+      { label: '起购金额：', value: flat(field(elements, '首参金额')) },
+      { label: '业绩报酬计提：', value: flat(field(elements, '业绩报酬')) },
+      { label: '开放期：', value: flat(field(elements, '开放期')) },
+      { label: '产品费率：', value: feeLine(field(elements, '参与/退出费率'), field(elements, '产品费率')) },
+    );
+    if (riskLine) rows.push({ label: riskLine, value: '' });
+    if (fit) rows.push({ label: '', value: fit });
   }
-  const disclaimer = `${DISCLAIMER_HEAD}4、本产品由${manager}发行与管理，${distributor}${pointFive}`;
-  return { name, riskLine, suitability: fit, rows, disclaimer };
+  const manager = flat(field(elements, '管理人')) || '上海国泰海通证券资产管理有限公司';
+  let disclaimer;
+  if (format === 'ccb') {
+    const pointFive = fit
+      ? `5、管理人风险等级评定为${riskPlain}，${fit}代销机构建设银行对本集合计划的风险等级评定以代销机构发布为准。`
+      : '';
+    disclaimer = `${DISCLAIMER_HEAD_CCB}4、本产品由${manager}发行与管理，建设银行作为代销机构不承担产品的投资、兑付责任和风险管理责任。${pointFive}`;
+  } else {
+    const distributor = channel === 'ccb'
+      ? '建设银行作为代销机构不承担产品的投资、兑付和风险管理责任。'
+      : '销售机构不承担产品的投资和兑付责任。';
+    let pointFive = '';
+    if (fit) {
+      pointFive = `5、${risk.code ? `管理人对于本集合计划的风险等级评定为${risk.code}，` : ''}${fit}`;
+      if (salesCode && RISK_WORD[salesCode]) pointFive += `该产品销售机构风险评级为${salesCode}（${RISK_WORD[salesCode]}）。`;
+    }
+    disclaimer = `${DISCLAIMER_HEAD}4、本产品由${manager}发行与管理，${distributor}${pointFive}`;
+  }
+  return { name, riskLine, suitability: fit, code: resolvedCode, date: String(date || '').trim(), rows, disclaimer, format };
 }
 
 const PT = 12700;
@@ -236,10 +263,11 @@ export function posterLayout(copy, frame) {
   };
 }
 
-export function posterFileName(productNameValue, asOf) {
+export function posterFileName(productNameValue, asOf, format = 'house') {
   const stamp = String(asOf || '').match(/^(\d{4})-(\d{2})/);
   const short = productName(productNameValue).replace(/集合资产管理计划/g, '').replace(/[/／\\:*?"<>|]/g, ' ').replace(/\s+/g, ' ').trim();
-  if (stamp && short) return `【海报  ${stamp[1]}${stamp[2]}】${short}.pptx`;
+  const prefix = format === 'ccb' ? '【持营海报' : '【海报  ';
+  if (stamp && short) return `${prefix}${stamp[1]}${stamp[2]}】${short}.pptx`;
   return `${short || '海报'}.pptx`;
 }
 
@@ -397,7 +425,7 @@ function appendStyled(body, sample, pieces, afterPts) {
   body.appendChild(paragraph);
 }
 
-function refillBody(shape, copy, sz) {
+function refillBody(shape, copy, sz, labelSz = sz) {
   const { body, paragraphs } = bodyParagraphs(shape);
   const found = pairAfter(paragraphs, '起购金额');
   const labelSample = found?.label?.cloneNode(true);
@@ -405,23 +433,50 @@ function refillBody(shape, copy, sz) {
   const valueRun = valueSample ? childList(valueSample).find(node => node.localName === 'r') : null;
   for (const paragraph of children(body, A, 'p')) body.removeChild(paragraph);
   const size = String(sz);
+  const labelSize = String(labelSz);
   for (const row of copy.rows) {
     if (row.label.startsWith('风险等级')) {
       appendStyled(body, labelSample, [
-        { text: '风险等级：', bold: true, sz: size },
+        { text: '风险等级：', bold: true, sz: labelSize },
         { text: row.label.replace(/^风险等级：/, ''), sample: valueRun, bold: false, sz: size },
       ], 400);
     } else if (!row.label) {
       appendStyled(body, valueSample, [{ text: row.value, sz: size }], 200);
     } else {
-      appendStyled(body, labelSample, [{ text: row.label, sz: size, bold: true }], 0);
+      appendStyled(body, labelSample, [{ text: row.label, sz: labelSize, bold: true }], 0);
       if (row.value) appendStyled(body, valueSample, [{ text: row.value, sz: size }], 500);
     }
   }
 }
 
+function writeBox(shape, text, sz, bold) {
+  const { body, paragraphs } = bodyParagraphs(shape);
+  const sample = paragraphs[0];
+  for (const paragraph of children(body, A, 'p')) body.removeChild(paragraph);
+  appendStyled(body, sample, [{ text, sz: String(sz), bold }], 0);
+}
+
+async function buildCcbPoster(templateBytes, copy) {
+  const zip = await globalThis.JSZip.loadAsync(templateBytes);
+  const doc = parseXml(await zip.file('ppt/slides/slide1.xml').async('string'));
+  const title = shapeByName(doc, '标题 1');
+  const box = shapeBox(title);
+  const chosen = chooseTitle(copy.name, copy.riskLine, usableWidth(title), box.h, usableWidth(title));
+  writeTitle(title, chosen.lines, copy.riskLine, chosen.nameSz, chosen.subSz, copy.name.includes('集合资产管理计划'));
+  stopAutofit(title);
+  writeBox(shapeByName(doc, '文本框 6'), copy.code ? `产品代码：${copy.code}` : '', 2400, true);
+  writeBox(shapeByName(doc, '文本框 9'), copy.date, 1800, true);
+  refillBody(shapeByName(doc, '文本框 20'), copy, 1000, 1600);
+  const footer = shapeByName(doc, '副标题 2');
+  writeBox(footer, copy.disclaimer, 800, false);
+  stopAutofit(footer);
+  zip.file('ppt/slides/slide1.xml', serializeXml(doc));
+  return zip.generateAsync({ type: 'uint8array', compression: 'DEFLATE' });
+}
+
 export async function buildPoster(templateBytes, spec) {
   const copy = posterCopy(spec);
+  if (spec.format === 'ccb') return buildCcbPoster(templateBytes, copy);
   const zip = await globalThis.JSZip.loadAsync(templateBytes);
   const doc = parseXml(await zip.file('ppt/slides/slide1.xml').async('string'));
   const pres = parseXml(await zip.file('ppt/presentation.xml').async('string'));
