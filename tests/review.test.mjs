@@ -327,9 +327,10 @@ check(!noFee.includes('业绩报酬计提标准为'), '没有业绩报酬时不�
 const waivedFee = composeElements(extractCore('业绩报酬\n本集合计划管理人不提取业绩报酬。'), { channel: 'house' }).find(row => row[0] === '业绩报酬')[1];
 check(waivedFee === '本集合计划不收取业绩报酬。', '合同写不提取业绩报酬时也改成不收取');
 const chargedFee = composeElements(extractCore('业绩报酬计提基准 3.5% ，提取 20% 作为业绩报酬。'), { channel: 'house' }).find(row => row[0] === '业绩报酬')[1];
-check(chargedFee.startsWith("业绩报酬计提标准为：") && chargedFee.includes("超过3.5%的部分提取20%的业绩报酬。") && chargedFee.includes("业绩报酬计提日为计划分红登记日、投资者退出日和计划终止日。（业绩报酬计提标准以公告为准）") && chargedFee.endsWith("业绩报酬计提基准不构成收益承诺，实际收益可能低于该基准。"), "有业绩报酬时保留原来的计提说明，并加上计提标准");
+const feeEnding = "业绩报酬计提标准以公告为准。业绩报酬计提日为计划分红登记日、投资者退出日和计划终止日。业绩报酬计提基准不构成收益承诺，实际收益可能低于该业绩报酬计提基准。";
+check(chargedFee.startsWith("业绩报酬计提标准为：") && chargedFee.includes("超过3.5%的部分提取20%的业绩报酬。") && chargedFee.endsWith(feeEnding) && !chargedFee.includes("（业绩报酬计提标准以公告为准）"), "有业绩报酬时，计提标准以公告为准这段写在最后");
 const announcedFee = composeElements(extractCore("业绩报酬\n业绩报酬计提基准以管理人公告为准。"), { channel: "house" }).find(row => row[0] === "业绩报酬")[1];
-check(announcedFee.includes("1）当R≤R1时，本集合计划不提取业绩报酬；") && !announcedFee.includes("业绩报酬计提基准以管理人公告为准") && announcedFee.includes("业绩报酬计提日为计划分红登记日、投资者退出日和计划终止日。（业绩报酬计提标准以公告为准）") && announcedFee.endsWith("业绩报酬计提基准不构成收益承诺，实际收益可能低于该基准。"), "只有公告基准时，不再写以管理人公告为准，计提日和风险说明仍保留");
+check(announcedFee.includes("1）当R≤R1时，本集合计划不提取业绩报酬；") && !announcedFee.includes("业绩报酬计提基准以管理人公告为准") && announcedFee.endsWith(feeEnding), "只有公告基准时，不再写以管理人公告为准，结尾仍是计提标准以公告为准这段");
 const codeLine = planProductCodeEdits([
   { id: 'c', part: 'word/document.xml', text: '产品代码：953794' },
   { id: 'n', part: 'word/document.xml', text: '产品代码写在正文说明里，不单独成行。' },

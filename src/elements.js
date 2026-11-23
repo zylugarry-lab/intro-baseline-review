@@ -63,7 +63,7 @@ export function composeElements(core, manual) {
 }
 
 const NO_PERFORMANCE_FEE = "本集合计划不收取业绩报酬。";
-const PERFORMANCE_FEE_NOTE = "业绩报酬计提日为计划分红登记日、投资者退出日和计划终止日。（业绩报酬计提标准以公告为准）\n业绩报酬计提基准不构成收益承诺，实际收益可能低于该基准。";
+const PERFORMANCE_FEE_NOTE = "业绩报酬计提标准以公告为准。业绩报酬计提日为计划分红登记日、投资者退出日和计划终止日。业绩报酬计提基准不构成收益承诺，实际收益可能低于该业绩报酬计提基准。";
 const PERFORMANCE_FEE_STANDARD = `业绩报酬计提标准为：
 1）当R≤R1时，本集合计划不提取业绩报酬；
 2）当R1＜R≤R2时，对年化收益率大于R1且不高于R2的收益部分提取F1比例的业绩报酬，即E=K×（R-R1）×F1×(T÷365)；
@@ -71,11 +71,13 @@ const PERFORMANCE_FEE_STANDARD = `业绩报酬计提标准为：
 
 function withPerformanceNote(text) {
   const body = String(text || "")
+    .replace(/业绩报酬计提标准以公告为准。?/g, "")
     .replace(/业绩报酬计提日为计划分红(?:权益)?登记日、投资者退出日和计划终止日。（业绩报酬计提(?:标准以公告为准|基准以管理人公告为准)）/g, "")
-    .replace(/业绩报酬计提基准不构成收益承诺，实际收益可能低于该基准。/g, "")
+    .replace(/业绩报酬计提日为计划分红(?:权益)?登记日、投资者退出日和计划终止日。?/g, "")
+    .replace(/业绩报酬计提基准不构成收益承诺，实际收益可能低于该(?:业绩报酬计提)?基准。/g, "")
     .replace(/\n{2,}/g, "\n")
     .trim();
-  return `${body}\n${PERFORMANCE_FEE_NOTE}`;
+  return body ? `${body}\n${PERFORMANCE_FEE_NOTE}` : PERFORMANCE_FEE_NOTE;
 }
 
 function withoutAnnounceBenchmark(text) {
