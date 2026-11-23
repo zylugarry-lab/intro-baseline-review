@@ -104,6 +104,10 @@ function performanceText(core, manual) {
   const mode = manual.perfMode || "auto";
   const p = core.performance || { mode: "announce" };
   if (mode === "none" || (mode === "auto" && p.mode === "none")) return NO_PERFORMANCE_FEE;
+  if (mode === "excess" || (mode === "auto" && p.mode === "excess")) {
+    const ratio = num(manual.r1 || p.ratio) || "20";
+    return withPerformanceNote(`当R≤max(0,R')时，本集合计划不提取业绩报酬；当R＞max(0,R')时，对超过部分提取${ratio}%的业绩报酬，即E=K×【R-max(0,R')】×${ratio}%×T/365。`);
+  }
   let text;
   if (mode === "tier" || (mode === "auto" && p.mode === "tier")) {
     const b1 = num(manual.b1 || p.b1);
@@ -382,6 +386,8 @@ function fieldPerformance(basic) {
   const waived = basic.match(/(本集合计划|本计划)不收取业绩报酬[^。\n]*/);
   if (waived) return { mode: "none", sentence: `${waived[0].replace(/[。.]?$/, "")}。` };
   if (/不(?:提取|计提|收取)业绩报酬/.test(basic)) return { mode: "none" };
+  const excess = basic.match(/R\s*[≤<=]\s*max\s*[（(]\s*0\s*[,，]\s*R['’′]\s*[）)][\s\S]{0,160}?R\s*[>＞]\s*max\s*[（(]\s*0\s*[,，]\s*R['’′]\s*[）)][\s\S]{0,40}?(\d+(?:\.\d+)?)\s*%/);
+  if (excess) return { mode: "excess", ratio: stripZero(excess[1]) };
   if (/R1/.test(basic) && /R2/.test(basic) && /5%/.test(basic) && /50%/.test(basic)) {
     return { mode: "tier", r1: "5", r2: "50" };
   }

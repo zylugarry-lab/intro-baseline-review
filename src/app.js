@@ -1,5 +1,5 @@
 import { companySections, selectVariant, COMPANY_LABELS } from './company.js?v=37';
-import { composeElements, extractCore } from './elements.js?v=40';
+import { composeElements, extractCore } from './elements.js?v=41';
 import { buildElementWorkbook, buildManagerWorkbook, parseManagerWorkbook } from './excel.js';
 import { downloadName, readDocxParagraphs, reviewOnePager } from './review.js?v=33';
 import { applySalesRating } from './risk.js';
