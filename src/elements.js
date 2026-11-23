@@ -240,6 +240,12 @@ function investmentBlock(basic, anchorRe, stopRe) {
 }
 
 function fieldDuration(basic) {
+  const months = basic.match(/存续期限(?:为)?\s*(?:自成立之日起)?\s*([0-9０-９]+\s*个月(?:（可展期）|\(可展期\))?)/);
+  if (months) {
+    const span = months[1].replace(/\s+/g, "").replace(/^自成立之日起/, "");
+    const sentence = `本集合计划存续期限为自成立之日起${span}`;
+    return sentence.endsWith("。") ? sentence : `${sentence}。`;
+  }
   const m = basic.match(/存续期限(?:为)?\s*(?:自成立之日起)?\s*([0-9０-９一二三四五六七八九十]+\s*年(?:（可展期）|\(可展期\))?)/);
   if (!m) return "";
   const years = m[1].replace(/\s+/g, "");
@@ -253,10 +259,10 @@ function fieldLock(text) {
 }
 
 function fieldOpening(basic) {
-  const numbered = basic.search(/2、开放期[：:]/);
+  const numbered = basic.search(/(?:^|\n)\s*\d+[、.]\s*开放期[：:]?/);
   if (numbered >= 0) {
-    let rest = basic.slice(numbered).replace(/^2、开放期[：:]/, "").trim();
-    const end = rest.search(/\n(?:[三四五六七八九十]{1,3}、|•\s*资产管理计划的目标规模|资产管理计划的目标规模|资产管理计划的存续期限|•\s*资产管理计划的存续期限)/);
+    let rest = basic.slice(numbered).replace(/^\s*\d+[、.]\s*开放期[：:]?\s*/, "").trim();
+    const end = rest.search(/\n\s*(?:[三四五六七八九十]{1,3}、|[（(][三四五六七八九十][）)]|•\s*资产管理计划的目标规模|资产管理计划的目标规模|资产管理计划的存续期限|•\s*资产管理计划的存续期限)/);
     if (end > 0) rest = rest.slice(0, end);
     return joinParagraphs(rest);
   }
@@ -272,9 +278,11 @@ function fieldStrategy(text) {
   const method = text.search(/投资管理的方法和标准/);
   if (method >= 0) {
     let rest = text.slice(method).replace(/^投资管理的方法和标准\s*/, "");
-    const end = rest.search(/\n\s*(?:2[、.）)]|[（(][四五六七八九十][）)]|[四五六七八九十]{1,3}、|业绩比较基准|投资限制|投资禁止)/);
+    const end = rest.search(/\n\s*(?:投资比例|业绩比较基准|投资限制|投资禁止|[（(][四五六七八九十][）)]|[四五六七八九十]{1,3}、)/);
     if (end > 20) rest = rest.slice(0, end);
     const lines = rest.split(/\n/).map((line) => line.trim()).filter(Boolean);
+    const titles = lines.filter((line) => /^\d+[、.）)]\s*\S{2,24}$/.test(line));
+    if (titles.length >= 2) return titles.join(" ");
     if (lines.length > 1 && /^\d+[、.）)]\s*\S{1,16}$/.test(lines[0])) lines.shift();
     return compact(lines.join("\n"));
   }
