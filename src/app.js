@@ -1,7 +1,7 @@
 import { companySections, selectVariant, COMPANY_LABELS } from './company.js?v=37';
 import { composeElements, extractCore } from './elements.js?v=41';
 import { buildElementWorkbook, buildManagerWorkbook, parseManagerWorkbook } from './excel.js';
-import { downloadName, readDocxParagraphs, reviewOnePager } from './review.js?v=33';
+import { downloadName, readDocxParagraphs, reviewOnePager } from './review.js?v=34';
 import { applySalesRating } from './risk.js';
 import { binaryDocText, wordKind } from './word.js';
 import { readStored, removeStored, writeStored } from './store.js';
@@ -32,6 +32,7 @@ const state = {
   onePagers: [],
   contracts: [],
   activeId: null,
+  reviewedContractId: null,
   contractName: '',
   core: null,
   elements: null,
@@ -713,7 +714,7 @@ async function readContracts(files) {
       };
       contract.rows = composeElements(core, { ...contract.manual, channel: channel(), perfMode: 'auto' }).map(([label, value]) => ({ label, value }));
       state.contracts.push(contract);
-      if (!state.activeId) activateContract(contract.id);
+      activateContract(contract.id);
     } catch (error) {
       errors.push(`${file.name}：${error.message || '合同没有读出来。'}`);
     }
@@ -724,6 +725,7 @@ async function readContracts(files) {
   }
   renderElements();
   await persistDraft();
+  followContract();
 }
 
 function bindDrop(element, onFiles) {
@@ -872,10 +874,38 @@ function renderResults(results) {
   });
 }
 
+let reviewGeneration = 0;
+
+function clearResults() {
+  $('results').replaceChildren();
+}
+
+function followContract() {
+  const contract = activeContract();
+  if (!contract) {
+    state.onePagers = [];
+    state.reviewedContractId = null;
+    renderOnePagers();
+    clearResults();
+    $('compare-hint').textContent = '合同已经移除，对应的一页通也清掉了。';
+    $('run').disabled = true;
+    return;
+  }
+  if (!state.onePagers.length) {
+    state.reviewedContractId = null;
+    clearResults();
+    return;
+  }
+  if (state.reviewedContractId === contract.id) return;
+  runReview();
+}
+
 async function runReview() {
+  const generation = ++reviewGeneration;
+  const contractId = state.activeId;
   $('run-error').hidden = true;
   $('run').disabled = true;
-  $('compare-hint').textContent = '正在核对…';
+  $('compare-hint').textContent = '正在按当前合同改一页通…';
   try {
     const paragraphs = state.companyParagraphs[state.variant] || [];
     const companyTextById = Object.fromEntries(paragraphs.map(paragraph => [paragraph.id, paragraph.text]));
@@ -898,14 +928,17 @@ async function runReview() {
         });
       }
     }
+    if (generation !== reviewGeneration || state.activeId !== contractId) return;
+    state.reviewedContractId = contractId;
     renderResults(results);
-    $('compare-hint').textContent = '核对完成。下载的 docx 打开就能看到改好的正文。';
+    $('compare-hint').textContent = '核对完成。下载的 Word 带修订痕迹，打开后在「审阅」里选「所有标记」就能看到红字。';
   } catch (error) {
+    if (generation !== reviewGeneration) return;
     $('run-error').hidden = false;
     $('run-error').textContent = error.message || '核对失败。';
     $('compare-hint').textContent = '核对没有完成。';
   } finally {
-    $('run').disabled = state.onePagers.length === 0;
+    if (generation === reviewGeneration) $('run').disabled = state.onePagers.length === 0;
   }
 }
 
@@ -1049,16 +1082,23 @@ function bind() {
   $('contract-list').addEventListener('click', event => {
     const open = event.target.closest('[data-open-contract]');
     const remove = event.target.closest('[data-remove-contract]');
-    if (open) {
+    if (open && open.dataset.openContract !== state.activeId) {
       activateContract(open.dataset.openContract);
       renderElements();
       scheduleSave();
+      followContract();
     }
     if (remove) {
-      state.contracts = state.contracts.filter(contract => contract.id !== remove.dataset.removeContract);
-      if (state.activeId === remove.dataset.removeContract) activateContract(state.contracts[0]?.id);
+      const removedId = remove.dataset.removeContract;
+      const reviewed = state.reviewedContractId === removedId;
+      state.contracts = state.contracts.filter(contract => contract.id !== removedId);
+      if (state.activeId === removedId) activateContract(state.contracts[0]?.id || null);
       renderElements();
       scheduleSave();
+      if (!state.contracts.length || reviewed) {
+        state.reviewedContractId = null;
+        followContract();
+      }
     }
   });
   $('product-code').addEventListener('input', () => {

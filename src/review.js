@@ -3,7 +3,7 @@ import { planCoverNameEdits, planElementEdits, planProductCodeEdits, productCode
 import { planLockEdits } from './lock.js';
 import { planManagerEdits } from './managers.js';
 import { planRiskEdits } from './risk.js';
-import { applyParagraphEdits, deleteParagraph, insertParagraphAfter, maxRevisionId } from './revise.js?v=33';
+import { applyParagraphEdits, deleteParagraph, insertParagraphAfter, maxRevisionId } from './revise.js?v=34';
 import { collectParagraphs, parseXml, serializeXml, NS } from './xml.js';
 import { wordKind } from './word.js';
 
@@ -132,9 +132,9 @@ async function ensureTracking(zip) {
   const file = zip.file('word/settings.xml');
   if (!file) return;
   const doc = parseXml(await file.async('string'));
-  for (const node of Array.from(doc.getElementsByTagNameNS(NS.w, 'trackRevisions'))) {
-    node.parentNode?.removeChild(node);
-  }
+  if (doc.getElementsByTagNameNS(NS.w, 'trackRevisions').length) return;
+  const marker = doc.createElementNS(NS.w, 'w:trackRevisions');
+  doc.documentElement.insertBefore(marker, doc.documentElement.firstChild);
   zip.file('word/settings.xml', serializeXml(doc));
 }
 

@@ -75,7 +75,7 @@ const tinyDoc = parseXml(tiny);
 const tinyParagraph = collectParagraphs(tinyDoc, 'word/document.xml')[0];
 applyParagraphEdits(tinyParagraph.node, [{ start: 0, before: '8', after: '9' }], { author: '介绍底稿', date: '2026-11-10T00:00:00Z', next: (() => { let n = 0; return () => { n += 1; return n; }; })() });
 const tinyXml = new XMLSerializer().serializeToString(tinyDoc);
-check(tinyXml.includes('>9<') && !tinyXml.includes('w:ins') && !tinyXml.includes('w:del'), '年限修改直接写进正文');
+check(tinyXml.includes('>9<') && tinyXml.includes('w:ins') && tinyXml.includes('w:del'), '年限修改保留修订痕迹');
 check(visibleText(tinyParagraph.node) === '9年证券从业经验，1年投资经验。', '打开后看到的是改后的年限');
 
 mkdirSync(new URL('tests/output/', root), { recursive: true });
@@ -164,8 +164,7 @@ check(riskRun.riskUpdated, '一页通风险揭示被改写');
 const riskParagraphs = await visibleParagraphs(riskRun.bytes);
 const riskXml = await JSZip.loadAsync(riskRun.bytes).then(zip => zip.file('word/document.xml').async('string'));
 check(riskParagraphs.some(paragraph => paragraph.text.includes('评定为R2（中低风险）') && paragraph.text.includes('该产品销售机构风险评级为R3（中风险）')), '打开后风险揭示已换成要素等级');
-const riskPlain = riskXml.replace(/<w:ins\b[\s\S]*?<\/w:ins>/g, '').replace(/<w:del\b[\s\S]*?<\/w:del>/g, '');
-check(riskPlain.includes('评定为R2（中低风险）') && riskPlain.includes('该产品销售机构风险评级为R3（中风险）'), '风险修改直接写进正文');
+check(riskXml.includes('<w:ins') && riskXml.includes('评定为R2（中低风险）') && riskXml.includes('该产品销售机构风险评级为R3（中风险）'), '风险修改保留修订痕迹');
 
 const elementBook = await buildElementWorkbook([['产品名称', '君享测试'], ['产品风险等级', 'R2（中低风险）\n该产品销售机构风险评级为R3（中风险）。']]);
 const elementZip = await JSZip.loadAsync(elementBook);
