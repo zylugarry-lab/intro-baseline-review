@@ -88,6 +88,7 @@ select, .search {
 .secondary, .text-button { background: white; color: var(--blue); border: 1px solid #b9cddd; padding: 7px 12px; }
 .text-button { border: 0; padding: 0; background: none; }
 .primary { padding: 11px 18px; font-weight: 650; }
+a.primary { display: inline-block; text-decoration: none; margin-left: 8px; }
 input[type=file] { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .drop { position: relative; }
 .drop.dragging { border-color: var(--blue); background: #edf6ff; }

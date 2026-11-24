@@ -56,8 +56,11 @@ function saveBlob(bytes, name, type) {
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = name;
+  link.rel = 'noopener';
+  document.body.appendChild(link);
   link.click();
-  setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(link.href), 15000);
 }
 
 function cloneRecord(record) {
@@ -773,6 +776,46 @@ function renderPoster() {
     : '先在第一步上传合同。产品代码用上面填的那一格。';
 }
 
+const posterTemplateLoads = new Map();
+let posterSaveUrl = '';
+
+function posterTemplateUrl(format) {
+  return format === 'ccb' ? './assets/poster-template-ccb.pptx?v=2' : './assets/poster-template.pptx?v=30';
+}
+
+function loadPosterTemplate(format) {
+  const url = posterTemplateUrl(format);
+  if (!posterTemplateLoads.has(url)) {
+    posterTemplateLoads.set(url, fetch(url).then(response => {
+      if (!response.ok) throw new Error('海报模板没有读出来。');
+      return response.arrayBuffer();
+    }).catch(error => {
+      posterTemplateLoads.delete(url);
+      throw error;
+    }));
+  }
+  return posterTemplateLoads.get(url);
+}
+
+function offerPoster(bytes, name) {
+  if (posterSaveUrl) URL.revokeObjectURL(posterSaveUrl);
+  const blob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.presentationml.presentation' });
+  posterSaveUrl = URL.createObjectURL(blob);
+  const box = $('poster-save');
+  box.hidden = false;
+  box.replaceChildren();
+  const link = document.createElement('a');
+  link.className = 'primary';
+  link.href = posterSaveUrl;
+  link.download = name;
+  link.textContent = '保存海报';
+  box.append('若没有自动开始下载，', link);
+  const click = link.cloneNode(true);
+  document.body.appendChild(click);
+  click.click();
+  click.remove();
+}
+
 async function downloadPoster() {
   const error = $('poster-error');
   error.hidden = true;
@@ -782,12 +825,14 @@ async function downloadPoster() {
     error.textContent = '先在第一步上传合同。';
     return;
   }
+  const button = $('download-poster');
+  button.disabled = true;
+  $('poster-hint').textContent = '正在生成海报…';
   try {
     const format = posterFormat();
-    const response = await fetch(format === 'ccb' ? './assets/poster-template-ccb.pptx?v=1' : './assets/poster-template.pptx?v=29');
-    if (!response.ok) throw new Error('海报模板没有读出来。');
+    const buffer = await loadPosterTemplate(format);
     readLiveElements();
-    const bytes = await buildPoster(new Uint8Array(await response.arrayBuffer()), {
+    const bytes = await buildPoster(new Uint8Array(buffer.slice(0)), {
       elements: active.rows,
       channel: channel(),
       format,
@@ -796,10 +841,13 @@ async function downloadPoster() {
       window: active.posterWindow || '',
       salesCode: active.manual.salesCode || '',
     });
-    saveBlob(bytes, posterFileName(elementValue('产品名称'), state.asOf, format), 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    offerPoster(bytes, posterFileName(elementValue('产品名称'), state.asOf, format));
+    renderPoster();
   } catch (failure) {
     error.hidden = false;
     error.textContent = failure.message || '海报没有生成。';
+    $('poster-hint').textContent = '海报没有生成，请再点一次下载。';
+    button.disabled = !activeContract()?.rows?.length;
   }
 }
 
@@ -1177,8 +1225,11 @@ function bind() {
   $('poster-format').addEventListener('change', () => {
     state.posterFormat = $('poster-format').value === 'ccb' ? 'ccb' : 'house';
     localStorage.setItem('poster-format', state.posterFormat);
+    loadPosterTemplate(state.posterFormat);
     renderPoster();
   });
+  loadPosterTemplate('house');
+  loadPosterTemplate('ccb');
   $('poster-date').addEventListener('input', () => {
     const contract = activeContract();
     if (contract) contract.posterDate = $('poster-date').value;
